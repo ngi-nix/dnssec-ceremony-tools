@@ -1,0 +1,149 @@
+{
+  recipeSpecVersion: v1.0
+  preamble:
+  {
+    timestamp: 2019-12-24 21:07:02
+    description: Dummy description
+  }
+  actions:
+  [
+    {
+      actionType: importPublicKey
+      actionParams:
+      {
+        key:
+        {
+          keyType: direct
+          keyAlgo: RSA
+          keyLabel: recipekey
+          keySize: 2048
+          keyData: AwEAAdCReNJa90GIIVfCDiyOyJVOEAiaolwnfYS7cWCyXFCLEnDvM34hdAHnK+rV13DztCa7N0Z2cUIwQNElKOAUwQKH41ViLR18/xODptwYhnjkEQLJHg3sO0FZV1nUoNtrhJ2KdLaYYv5LufheDgRXqbbVhZ8aVti7HLTbQaiUR8ppVT/YCy4tdDoEcX5ue+VdkOesvfT6BcmpAuar/gJMvH1wMV/DPwTdPAo1sK0QOToy/6NCCS/oLgr3j38IrjxDOOngGwyXtfdssPN5d0cBkKXFIxfWbf8aalAfpTVrrX6/KFXKWNG6wMZkJkJlaywtTN4uUgfkXqFzcJp8Gw5Ie3k=
+        }
+      }
+      cooked:
+      {
+        keyBlob: l1c0zClYhXJX37Zqt3bJPhxHrxEMM64OYdNlsc1rWMTpSZh6lXg1Qq9k/FTHSOYEhGF19L2Za5H9vf6A1WeXKJ3b7QTIYe8Wd9kzpv1Grq3CDz/M7B+8T8qkABkcEoDYOGoP8dUbie8ZNjQxzT6L2K6Ln394vw0syRu9BytGqCb/N/0VmjcOo5ig15SiKeBkspYKbv4u10C6XOWQqemDpxUpiWYTfo0uZX7u42My0yORrZxbo7pnRKwvjmWHj2iVWLMdbYC8bxn6HbTdsE+x9YSeOGiudBkLIG/OTfC2YCVLDmZP17mNDpiBq9kttMYWU9b6fUMoAvhlJqUaMOVLNA==
+        success: true
+      }
+    }
+    {
+      actionType: generateKey
+      actionParams:
+      {
+        keyAlgo: "8"
+        keyFlags: 257
+        keyLabel: KSK2020
+        keySize: 2048
+      }
+      cooked:
+      {
+        generateSuccess: true
+        success: true
+      }
+    }
+    {
+      actionType: generateKey
+      actionParams:
+      {
+        keyAlgo: 8
+        keyFlags: 256
+        keyID: hex d5b2babdf703f4e5c469434df5071981
+        keySize: 1024
+        exportable: true
+      }
+      cooked:
+      {
+        generateSuccess: true
+        success: true
+      }
+    }
+    {
+      actionType: exportKeypair
+      actionParams:
+      {
+        key:
+        {
+          keyType: byRef
+          keyAlgo: 8
+          keyFlags: 256
+          keyID: hex d5b2babdf703f4e5c469434df5071981
+        }
+      }
+      cooked:
+      {
+        exportSuccess: true
+      }
+    }
+    {
+      actionType: produceSignedKeyset
+      actionParams:
+      {
+        ownerName: nl.
+        signerName: nl.
+        inception: 2020-02-16 10:42:58
+        expiration: 2020-04-16 10:41:58
+        ttl: 60
+        keyset:
+        [
+          {
+            key:
+            {
+              keyType: byRef
+              keyAlgo: 8
+              keyFlags: 257
+              keyLabel: KSK2020
+            }
+          }
+          {
+            key:
+            {
+              keyType: byRef
+              keyAlgo: 8
+              keyFlags: 256
+              keyID: hex d5b2babdf703f4e5c469434df5071981
+            }
+          }
+        ]
+        signedBy:
+        [
+          {
+            key:
+            {
+              keyType: byRef
+              keyAlgo: 8
+              keyFlags: 257
+              keyLabel: KSK2020
+            }
+          }
+        ]
+      }
+      cooked:
+      {
+        signedKeysetRRs:
+          '''
+          nl.	60	IN	DNSKEY	257 3 8 AwEAAcNJr6wSbwjxaT9gDZ7W9ao1YYSxD6ybqRWcuBmD22rVBg4v0J9JmVLExoyinIrLLpU836ZQ2QGq/Zfu2SKgwHvBOG3EernQoXBTj3x07R8FVaPE5Gy7p7+IzP3ibn5J5Qv1BuyPwtEsxxb6nNm4ABdknI/kqgzf8Zed3h+jU9nzYeeb3Dhnk1/MV3mz1d0vWAESL65Oe99uYCqPHkm46eccYwNIrGeMsOajJUZJBI0gRRMd7J7LpsUWEYk2Sk/0rrTuJYY/ANNUIzhP65AEtNlhBOF6IfOnvu50XEM6Btq+qHXcRkCgfdXHXMzTCsZghXutT3Ucqix7+zWGNxwW8/8= ;{id = 8599 (257), size = 256b}
+          nl.	60	IN	DNSKEY	256 3 8 AwEAAezs7esXORUnMtkC84RHI2EX1HlE1aAzb61hp75nDMQMtahjbjs9KROX8WWuuAqNE3iIfPz1gE7NyAF+mQaCH9Relz7QuQNMOI+Rtbp5vDslXX/wWEHe4hzLcw9XfSe+HYQl+eDptSzpTn/YErMGGVG0XYKz5SHAJfPsl2R6ixraAwocxAvsP7dRsysVFioAEdnqmTGdYN2fzM7DePbTruis8L5RvK66VXhbQM00rugUsB94S1/J/v2mUFAPGFlO1QSC5bLDnTokeukNv1VOyZREYTG9AMfYhPLOHeIOI4yfHYspTT8uTymrlnPuy2yGYT4IGZB14n3ruRFyThkScfc= ;{id = 43158 (256), size = 256b}
+          nl.	60	IN	RRSIG	DNSKEY 8 1 60 202016041041 202016021042 8599 nl. U4Pg+gEbsf/VvWDh/JRl/er5Ay+8UYjn4pu3SkmIucrOHryesFdeJK36fiNYAGucGQRXBTf2sCMj8HGkidPXBSBhjFLAU9yN+FKeS8kdDwDfOos4pZtrLRWoc/AMFubRRb03gvg08Ls3KwbtjRdsbNXlwreUlVA57/g89J8NcMmA9BYRB+Jg7d3CWcWee8fi4H0DfvyaiXb3xCkcRTpQLfhvOhApDKKUCk3Pid6vktsUje382TwZV21uCqe2XosypmfjlXx8paEFxAvOA28mL42qP6NOxWnFXPuZTagKMRSZP8OHcxiyEkp5oaUlN6UXt7NO1WwV25rOPrHueChR+Q==
+
+          '''
+      }
+    }
+    {
+      actionType: deleteKey
+      actionParams:
+      {
+        key:
+        {
+          keyType: byRef
+          keyID: hex d5b2babdf703f4e5c469434df5071981
+        }
+        mustExist: true
+      }
+      cooked:
+      {
+        deleteSuccess: true
+        success: true
+      }
+    }
+  ]
+}

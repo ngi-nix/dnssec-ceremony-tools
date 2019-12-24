@@ -35,7 +35,7 @@
       actionType: generateKey
       actionParams:
       {
-        keyAlgo: 5
+        keyAlgo: 8
         keyFlags: 256
         keyID: hex d5b2babdf703f4e5c469434df5071981
         keySize: 1024
@@ -48,7 +48,7 @@
       {
         key: {
           keyType: byRef
-          keyAlgo: 5
+          keyAlgo: 8
           keyFlags: 256
           keyID: hex d5b2babdf703f4e5c469434df5071981
         },
@@ -70,20 +70,20 @@
         keyset: [ {
           key: {
             keyType: byRef
-            keyAlgo: 5
+            keyAlgo: 8
             keyFlags: 257
             keyLabel: KSK2020
           } }, {
           key: {
             keyType: byRef
-            keyAlgo: 5
+            keyAlgo: 8
             keyFlags: 256
             keyID: hex d5b2babdf703f4e5c469434df5071981
           } } ]
         signedBy: [ {
           key: {
             keyType: byRef
-            keyAlgo: 5
+            keyAlgo: 8
             keyFlags: 257
             keyLabel: KSK2020
           }

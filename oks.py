@@ -1,23 +1,11 @@
 #! /usr/bin/env python3
 
-# Python 3.7 as minimum as dict must be ordered
-# pip install json-tricks
-# pip3 install hjson
-# pip3 install pyyaml
-# pip3 install python-pkcs11 (NOT pkcs11)
-# why not use https://tools.ietf.org/html/rfc7512
-# https://docs.infoblox.com/display/NAG8/RRSIG+Resource+Records
-# YES is not valid boolean in json even not True
-# cannot fully test because of havekeys
-
 __author__ = "Berry van Halderen"
 __date__ = "$Nov 13, 2019 10:27:32 AM$"
 
 import os
 import sys
 import getopt
-#import json
-#import json_tricks
 import hjson
 import yaml
 import re
@@ -91,7 +79,7 @@ class Record:
     keydata = None
     keystore = None
     keyckaid = None
-    keyalgo = 8
+    keyalgo = None
     keytag:int = None
     keyonhsm = True
     keysecretdata = None
@@ -413,7 +401,7 @@ def duration_decr(dt, duration):
 def signkey(session, inception, expiration, key, keys, ttl, ownername, signername=None):
     if signername == None:
         signername = ownername
-    sigalgo = 8
+    sigalgo = key.keyalgo
     sigover = 'DNSKEY'
     siglabels = 0
     signame = signername
@@ -424,7 +412,6 @@ def signkey(session, inception, expiration, key, keys, ttl, ownername, signernam
     rrsig.ttl = sigttl
     rrsig.data = [ sigover, sigalgo, siglabels, sigttl, expiration, inception, key.getkeytag(), signame ]
 
-
     # Build the sign buffer
     buffer = bytearray()
     # Add type (2 bytes)
@@ -432,7 +419,7 @@ def signkey(session, inception, expiration, key, keys, ttl, ownername, signernam
     buffer.append(48                          & 0xff)
     # Add algo (1 bytes)
     buffer.append(sigalgo                     & 0xff)
-    # Add algo (2 bytes)
+    # Add label count (1 byte)
     buffer.append(siglabels                   & 0xff)
     # Add the original TTL
     buffer.append((sigttl>>24)                & 0xff)
@@ -462,7 +449,8 @@ def signkey(session, inception, expiration, key, keys, ttl, ownername, signernam
             buffer.append(ord(ch))
     # Add the keys
     for k in keys:
-        buffer.extend(k.bytes())
+        for ch in k.bytes():
+            buffer.append(ch)
 
     digest = session.digest(bytes(buffer), mechanism=pkcs11.mechanisms.Mechanism.SHA256)
     gethsmkeys(session, key)
@@ -551,7 +539,7 @@ def newkey(session, key, exportable=False, ontoken=True):
         pubtemplate[pkcs11.constants.Attribute.ID]  = id
         privtemplate[pkcs11.constants.Attribute.ID] = id
     if label != None and id != None:
-        print("No label or id specified")
+        raise Burned("No label or id specified")
         success = False
         return success
 
@@ -918,7 +906,7 @@ def cookrecipe(recipefile):
         lib = pkcs11.lib(conf_repomodule)
         token = lib.get_token(token_label=conf_repolabel)
     except pkcs11.exceptions.NoSuchToken:
-        print("Unable to access token "+conf_repolabel, file=sys.stderr)
+        print("Unable to access default token "+conf_repolabel, file=sys.stderr)
         sys.exit(1)
     recipecomplete = True
     with token.open(user_pin=conf_repopin, rw=True) as session:
@@ -1070,7 +1058,11 @@ def cookrecipe(recipefile):
     if recipecomplete:
         print("Recipe completed.", file=sys.stderr)
 
+
 def usage(message=None):
+    '''
+    Output message to stderr regarding command line usage.
+    '''
     print("", file=sys.stderr)
     if message != None:
         print(sys.argv[0] + ": " + message, file=sys.stderr)
@@ -1099,6 +1091,10 @@ def usage(message=None):
 
 
 def main():
+    '''
+    Main program that reads the configuration file, command line arguments and then decides between the
+    different modes of the program.
+    '''
     global conf_repomodule
     global conf_repolabel
     global conf_repopin
@@ -1141,9 +1137,28 @@ def main():
     with open(configfile) as file:
         conf = yaml.load(file, Loader=yaml.FullLoader)
         conf_version = conf['version']
-        conf_repomodule = str(conf['repository']['module'])
-        conf_repolabel  = str(conf['repository']['label'])
-        conf_repopin    = str(conf['repository']['pin'])
+        if conf.get('repository') != None:
+            conf_repomodule = str(conf['repository']['module'])
+            conf_repolabel  = str(conf['repository']['label'])
+            conf_repopin    = str(conf['repository']['pin'])
+        conf_reposmodule = { }
+        conf_reposlabel   = { }
+        conf_repospin     = { }
+        for confrepo in conf['repositories']:
+            if isinstance(confrepo,str):
+                confreponame = confrepo
+                conf_reposmodule[confreponame] = str(conf['repositories'][confrepo]['module'])
+                conf_reposlabel[confreponame]  = str(conf['repositories'][confrepo]['label'])
+                conf_repospin[confreponame]    = str(conf['repositories'][confrepo]['pin'])
+            else:
+                confreponame = next(iter(confrepo))
+                conf_reposmodule[confreponame] = str(confrepo['module'])
+                conf_reposlabel[confreponame]  = str(confrepo['label'])
+                conf_repospin[confreponame]    = str(confrepo['pin'])
+            if confreponame == "default":
+                conf_repomodule = conf_reposmodule[confreponame]
+                conf_repolabel  = conf_reposlabel[confreponame]
+                conf_repopin    = conf_repospin[confreponame]
         kasp_refresh         = str(conf['kasp']['refresh'])
         kasp_validity        = str(conf['kasp']['validity'])
         kasp_inceptionoffset = str(conf['kasp']['inceptionoffset'])
