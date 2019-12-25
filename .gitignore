@@ -2,4 +2,9 @@
 **/*~
 /build/
 /test-driver
-nbproject
+/nbproject/private/
+
+/attic
+/run.sh
+/softhsm-**
+/ROOT
