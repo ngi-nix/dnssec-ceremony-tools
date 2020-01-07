@@ -709,9 +709,76 @@ def wrapkey(key, wrappingkey, wrapPublic=False):
     else:
         wraphandle = wrappingkey.handles['secret']
         keyhandle  = key.handles['private']
-        mechanism = pkcs11.mechanisms.Mechanism.AES_KEY_WRAP_PAD
+        mechanism = pkcs11.mechanisms.Mechanism.AES_KEY_WRAP
     bytes = wraphandle.wrap_key(keyhandle, mechanism=mechanism)
     return base64.b64encode(bytes).decode()
+
+
+def unwraptemplate(key):
+    id    = key.getkeyckaid()
+    label = key.keylabel
+    template = { pkcs11.constants.Attribute.TOKEN: True,  pkcs11.constants.Attribute.PRIVATE: True }
+    if label != None:
+        template[pkcs11.constants.Attribute.LABEL] = label
+    if id != None:
+        template[pkcs11.constants.Attribute.ID] = id
+    template[pkcs11.constants.Attribute.CLASS]        = pkcs11.ObjectClass.PRIVATE_KEY
+    template[pkcs11.constants.Attribute.KEY_TYPE]     = pkcs11.KeyType.RSA
+    template[pkcs11.constants.Attribute.PRIVATE]      = True
+    template[pkcs11.constants.Attribute.DECRYPT]      = True
+    template[pkcs11.constants.Attribute.SIGN]         = False
+    template[pkcs11.constants.Attribute.UNWRAP]       = True
+    template[pkcs11.constants.Attribute.SENSITIVE]    = False
+    template[pkcs11.constants.Attribute.EXTRACTABLE]  = True
+    template[pkcs11.constants.Attribute.ENCRYPT]      = pkcs11.DEFAULT
+    template[pkcs11.constants.Attribute.WRAP]         = pkcs11.DEFAULT
+    template[pkcs11.constants.Attribute.VERIFY]       = pkcs11.DEFAULT
+    return template
+
+
+def unwrapsymkey(key, wrappingkey, bytes):
+    gethsmkeys(wrappingkey)
+    bytes = base64.b64decode(bytes)
+    id    = key.getkeyckaid()
+    label = key.keylabel
+    template = unwraptemplate(key)
+    template[pkcs11.constants.Attribute.TOKEN] = False
+    wraphandle = wrappingkey.handles['private']
+    mechanism = pkcs11.mechanisms.Mechanism.RSA_PKCS
+    flags = pkcs11.constants.MechanismFlag.HW | pkcs11.constants.MechanismFlag.SIGN | pkcs11.constants.MechanismFlag.VERIFY
+    flags |= pkcs11.constants.MechanismFlag.DECRYPT
+    flags |= pkcs11.constants.MechanismFlag.UNWRAP | pkcs11.constants.MechanismFlag.DIGEST
+    keyhandle = wraphandle.unwrap_key(object_class=pkcs11.ObjectClass.PRIVATE_KEY,
+                                      key_type=pkcs11.KeyType.AES,
+                                      key_data=bytes,
+                                      label=label,
+                                      id=id,
+                                      template=privtemplate,
+                                      store=False,
+                                      capabilities=flags)
+    key.handles['secret']  = keyhandle
+
+
+def unwrapasymkey(key, wrappingkey, bytes):
+    gethsmkeys(wrappingkey)
+    bytes = base64.b64decode(bytes)
+    id    = key.getkeyckaid()
+    label = key.keylabel
+    template = unwraptemplate(key)
+    wraphandle = wrappingkey.handles['secret']
+    mechanism = pkcs11.mechanisms.Mechanism.AES_KEY_WRAP
+    flags = pkcs11.constants.MechanismFlag.HW | pkcs11.constants.MechanismFlag.SIGN | pkcs11.constants.MechanismFlag.VERIFY
+    flags |= pkcs11.constants.MechanismFlag.DECRYPT
+    flags |= pkcs11.constants.MechanismFlag.UNWRAP | pkcs11.constants.MechanismFlag.DIGEST
+    keyhandle = wraphandle.unwrap_key(object_class=pkcs11.ObjectClass.PRIVATE_KEY,
+                                      key_type=pkcs11.KeyType.RSA,
+                                      key_data=bytes,
+                                      label=label,
+                                      id=id,
+                                      template=privtemplate,
+                                      store=True,
+                                      capabilities=flags)
+    key.handles['private'] = keyhandle
 
 
 def byrefkey(key):
@@ -1033,7 +1100,7 @@ def cookrecipe(recipefile):
                     if key.keysecretdata != None:
                         action['cooked']['keyBlob'] = key.keysecretdata
                         action['cooked']['exportSuccess'] = True 
-                else:
+                    else:
                     if action['actionParams']['wrappingKey']['keyType'] != "byRef":
                         raise Burned("wrapping key not by key reference")
                     wrappingkey = parsekey(action['actionParams']['wrappingKey'])
