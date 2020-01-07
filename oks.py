@@ -982,13 +982,60 @@ def producerecipe(zone, inputfile, outputfile):
         file.close()
 
 
-def consumerecipe(recipefile):
-    global conf_repomodule
-    global conf_repolabel
-    global conf_repopin
+def consumerecipe(recipefile, publishtime=None):
+    global args_debug
     with open(recipefile, "r") as file:
         recipe = hjson.load(file)
         file.close()
+    recipecounter = 1
+    recipecomplete = True
+    for action in recipe['actions']:
+        try:
+            if action['actionType'] == 'produceSignedKeyset':
+                signedset = action['cooked']['exportSuccess']
+                # find out the minimum inception time
+            elif action['actionType'] in ('importPublicKey') and action['cooked'].get('importSuccess'):
+                if action['cooked'].get('keyBlob') != None:
+                    key = wrappingkey = parsekey(action['actionParams']['key'])
+                    bytes = action['cooked']['keyBlob']
+                    bytes = base64.decode(bytes)
+                    unwrapkey(key, wrappingkey, bytes, True)
+            elif action['actionType'] in ('exportKeypair', 'exportKey') and action['cooked'].get('exportSuccess'):
+                if action['actionParams']['key']['keyType'] != "byRef":
+                    raise Burned("exported key not by key reference")
+                key = parsekey(action['actionParams']['key'])
+                wrappingkey = action['actionParams'].get('wrappingKey')
+                if wrappingkey == None:
+                    key.keysecretdata = action['cooked']['keyBlob']
+                    key.keydata = action['cooked']['keyData']
+                    newkey(key, False, True)
+                else:
+                    wrappingkey = parsekey(wrappingkey)
+                    bytes = action['cooked']['keyBlob']
+                    unwrapkey(key, wrappingkey, bytes)
+            else:
+                pass
+            recipecounter += 1
+        except KeyError as ex:
+            print("missing value for field "+ex.args[0]+" in recipe", file=sys.stderr)
+            print("recipe step "+str(recipecounter)+" failed")
+            recipecomplete = False
+            break
+        except pkcs11.exceptions.GeneralError as ex:
+            print("PKCS11 error", file=sys.stderr)
+            print("recipe step "+str(recipecounter)+" failed")
+            recipecomplete = False
+            break
+        except Burned as ex:
+            print(ex.message, file=sys.stderr)
+            print("recipe step "+str(recipecounter)+" failed")
+            recipecomplete = False
+            break
+    if recipecomplete:
+        print("Recipe completed.", file=sys.stderr)
+        return 0
+    else:
+        return 1
 
 
 def cookrecipe(recipefile):
@@ -1114,7 +1161,6 @@ def cookrecipe(recipefile):
                     if key.keysecretdata != None:
                         action['cooked']['keyBlob'] = key.keysecretdata
                         action['cooked']['exportSuccess'] = True 
-                    else:
                     if action['actionParams']['wrappingKey']['keyType'] != "byRef":
                         raise Burned("wrapping key not by key reference")
                     wrappingkey = parsekey(action['actionParams']['wrappingKey'])
