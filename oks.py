@@ -1161,6 +1161,9 @@ def cookrecipe(recipefile):
                     if key.keysecretdata != None:
                         action['cooked']['keyBlob'] = key.keysecretdata
                         action['cooked']['exportSuccess'] = True 
+                    else:
+                        action['cooked']['exportSuccess'] = False
+                else:
                     if action['actionParams']['wrappingKey']['keyType'] != "byRef":
                         raise Burned("wrapping key not by key reference")
                     wrappingkey = parsekey(action['actionParams']['wrappingKey'])
@@ -1170,18 +1173,18 @@ def cookrecipe(recipefile):
                 raise Burned("unknown action "+action['actionType'])
             recipecounter += 1
         except KeyError as ex:
-            print("missing value for field"+ex.args[0]+" in recipe", file=sys.stderr)
-            print("recipe step "+recipecounter+" failed")
+            print("Missing value for field {} in recipe".format(ex.args[0]), file=sys.stderr)
+            print(f"Recipe step {recipecounter} failed")
             recipecomplete = False
             break
         except pkcs11.exceptions.GeneralError as ex:
             print("PKCS11 error", file=sys.stderr)
-                print("recipe step "+recipecounter+" failed")
+            print(f"Recipe step {recipecounter} failed")
             recipecomplete = False
             break
         except Burned as ex:
             print(ex.message, file=sys.stderr)
-                print("recipe step "+recipecounter+" failed")
+            print(f"Recipe step {recipecounter} failed")
             recipecomplete = False
             break
     with open(recipefile, "w") as file:
