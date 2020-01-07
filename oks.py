@@ -17,9 +17,6 @@ import binascii
 import random
 
 # These parameters should come from a configuration file, the KASP configuration and command line arguments
-conf_repomodule=None
-conf_repolabel=None
-conf_repopin=None
 kasp_refresh=None
 kasp_validity=None
 kasp_inceptionoffset=None
@@ -85,6 +82,7 @@ class Record:
     keysecretdata = None
     keylabel = None
     keysize = None
+    keystore = None
     handles = { }
     rdata = None
 
@@ -398,7 +396,7 @@ def duration_decr(dt, duration):
     return duration_incr(dt, duration, False)
 
 
-def signkey(session, inception, expiration, key, keys, ttl, ownername, signername=None):
+def signkey(inception, expiration, key, keys, ttl, ownername, signername=None):
     if signername == None:
         signername = ownername
     sigalgo = key.keyalgo
@@ -452,22 +450,23 @@ def signkey(session, inception, expiration, key, keys, ttl, ownername, signernam
         for ch in k.bytes():
             buffer.append(ch)
 
+    session = gethsmsession(key)
     digest = session.digest(bytes(buffer), mechanism=pkcs11.mechanisms.Mechanism.SHA256)
-    gethsmkeys(session, key)
+    gethsmkeys(key)
     signature = key.handles['private'].sign(digest)
     rrsig.data.append(signature)
     return rrsig
 
 
-def signkeyset(session, inception, expiration, keys, keyset, ttl, ownername, signername=None):
+def signkeyset(inception, expiration, keys, keyset, ttl, ownername, signername=None):
     records = ""
     # TODO sort the keyset such that the order is correct
     for key in keyset:
         key.ttl = ttl
-        getkeydata(session, key, key.handles['public'])
+        getkeydata(key, key.handles['public'])
         records += key.str() + "\n"
     for key in keys:
-        rrsig = signkey(session, inception, expiration, key, keyset, ttl, ownername, signername)
+        rrsig = signkey(inception, expiration, key, keyset, ttl, ownername, signername)
         records += rrsig.str() +"\n"
     return records
 
@@ -508,7 +507,7 @@ def decomposekeydata(buffer):
     return ( modulus, exponent )
 
 
-def newkey(session, key, exportable=False, ontoken=True):
+def newkey(key, exportable=False, ontoken=True):
     success = True
 
     if key.keysecretdata == None:
@@ -592,6 +591,7 @@ def newkey(session, key, exportable=False, ontoken=True):
     key.keydata = None
     key.keysecretdata = None
 
+    session = gethsmsession(key)
     if key.keyalgostr() in ( "AES" ):
         if not importkey:
             len = 16 * 8
@@ -632,7 +632,7 @@ def newkey(session, key, exportable=False, ontoken=True):
 
 
 
-def getkeydata(session, key, handle, public=True, private=False):
+def getkeydata(key, handle, public=True, private=False):
     if public == False and private == False:
         return None
     modulus = handle[pkcs11.constants.Attribute.MODULUS]
@@ -651,9 +651,19 @@ def getkeydata(session, key, handle, public=True, private=False):
     return key.keydata
 
 
-def gethsmkeys(session, key):
+def gethsmsession(key):
+    global sessions
+    if key.keystore == None:
+        session = sessions["default"]
+    else:
+        session = sessions[key.keystore]
+    return session
+
+
+def gethsmkeys(key):
     handles = { }
     attrs = { }
+    session = gethsmsession(key)
     if key.keylabel != None:
         attrs[pkcs11.constants.Attribute.LABEL] = str(key.keylabel)
     if key.keyckaid != None:
@@ -674,9 +684,9 @@ def gethsmkeys(session, key):
         return False
 
 
-def deletekeys(session, key):
+def deletekeys(key):
     success = True
-    gethsmkeys(session, key)
+    gethsmkeys(key)
     for handle in key.handles.values():
         try:
             handle.destroy()
@@ -685,9 +695,9 @@ def deletekeys(session, key):
     return success
 
 
-def wrapkey(session, key, wrappingkey, wrapPublic=False):
-    gethsmkeys(session, key)
-    gethsmkeys(session, wrappingkey)
+def wrapkey(key, wrappingkey, wrapPublic=False):
+    gethsmkeys(key)
+    gethsmkeys(wrappingkey)
     if wrapPublic:
         wraphandle = wrappingkey.handles['public']
         keyhandle  = key.handles['secret']
@@ -732,6 +742,8 @@ def parsekey(params):
         key.keysecretdata = params['keySecretData']
     if params.get('keyData'):
         key.keydata = params['keyData']
+    if params.get('keyStore'):
+        key.keystore = params['keyStore']
     if params.get('keyID'):
         key.keyckaid = params['keyID']
     if params.get('keyLabel'):
@@ -845,7 +857,7 @@ def producerecipe(zone, inputfile, outputfile):
                'keySize': key.keysize }
     keys[key.keyckaid] = key
     recipe['actions'].append({ "actionType": "generateKey", "actionParams": action })
-    
+
     args_until = todatetime(args_until)
     now = now()
     while now < args_until:
@@ -893,163 +905,152 @@ def consumerecipe(recipefile):
 
 
 def cookrecipe(recipefile):
-    global conf_repomodule
-    global conf_repolabel
-    global conf_repopin
     global args_debug
     keys = { }
-    try:
-        with open(recipefile, "r") as file:
-            #recipe = json.load(file,ignore_comments=False,preserve_order=True)
-            recipe = hjson.load(file)
-            file.close()
-        lib = pkcs11.lib(conf_repomodule)
-        token = lib.get_token(token_label=conf_repolabel)
-    except pkcs11.exceptions.NoSuchToken:
-        print("Unable to access default token "+conf_repolabel, file=sys.stderr)
-        sys.exit(1)
+    with open(recipefile, "r") as file:
+        #recipe = json.load(file,ignore_comments=False,preserve_order=True)
+        recipe = hjson.load(file)
+        file.close()
     recipecomplete = True
-    with token.open(user_pin=conf_repopin, rw=True) as session:
-        recipecounter = 1
-        for action in recipe['actions']:
-            action['cooked'] = { }
-            try:
-                if action['actionType'] == "generateKey":
-                    key = Record(action['actionParams'].get('owner'))
-                    key.type = 'DNSKEY'
-                    key.keytype  = action['actionParams'].get('keyFlags')
-                    key.keyckaid = action['actionParams'].get('keyID')
-                    key.keylabel = action['actionParams'].get('keyLabel')
-                    if action['actionParams'].get('exportable') == True:
-                        exportable = True
-                    else:
-                        exportable = False
-                    key.keyalgo  = action['actionParams']['keyAlgo']
-                    key.keysize  = action['actionParams']['keySize']
-                    success = newkey(session, key=key, exportable=exportable, ontoken=True)
-                    #keys[key.getkeytag()] = key
-                    action['cooked']['generateSuccess'] = success
-                    action['cooked']['success'] = success
-                    if args_debug:
-                        #action['cooked']['keyTag'] = key.getkeytag()
-                        if key.keyckaid != None:
-                            action['cooked']['keyID'] = key.keyckaid
-                        if key.keylabel != None and key.keylabel != "":
-                            action['cooked']['keyLabel'] = key.keylabel
-                        action['cooked']['keyData'] = key.keydata
-                        if key.keysecretdata != None:
-                            action['cooked']['keySecretData'] = key.keysecretdata
-                elif action['actionType'] == 'produceSignedKeyset':
-                    ownername   = action['actionParams']['ownerName']
-                    signername  = action['actionParams'].get('signerName')
-                    inception   = action['actionParams']['inception']
-                    expiration  = action['actionParams']['expiration']
-                    ttl         = action['actionParams']['ttl']
-                    keyset = [ ]
-                    keys = [ ]
-                    for params in action['actionParams']['keyset']:
-                        key = parsekey(params['key'])
-                        key.ttl   = ttl
-                        key.name = ownername
-                        gethsmkeys(session, key)
-                        keyset.append(key)
-                    for params in action['actionParams']['signedBy']:
-                        key = parsekey(params['key'])
-                        if key.keydata == None:
-                            gethsmkeys(session, key)
-                            getkeydata(session, key, key.handles['public'])
-                        keys.append(key)
-                    signedset = signkeyset(session, todatetime(inception), todatetime(expiration), keys, keyset, ttl, ownername, signername)
-                    action['cooked']['signedKeysetRRs'] = signedset
-                elif action['actionType'] == 'haveKey':
-                    key = parsekey(action['actionParams']['key'])
-                    if not gethsmkeys(session, key):
-                        action['cooked']['exists'] = False
-                        if action['actionParams'].get('relaxed') != True:
-                            raise Burned("mandatory key {0} does not exist".format(key.location()))
-                    else:
-                        action['cooked']['exists'] = True
-                elif action['actionType'] == 'deleteKey':
-                    key = parsekey(action['actionParams']['key'])
-                    if not gethsmkeys(session, key):
-                        if action['actionParams'].get('mustExist') == True:
-                            raise Burned("mandatory key {0} does not exist trying to delete".format(key.location()))
-                        else:
-                            # not able to seperate between key not there and key not deletable
-                            action['cooked']['deleteSuccess'] = False
-                    else:
-                        success = deletekeys(session, key)
-                        action['cooked']['deleteSuccess'] = success
-                    action['cooked']['success'] = success
-                elif action['actionType'] in ('importPublicKey', 'importKey', 'importKeypair'):
-                    if action['actionParams']['key']['keyType'] != "direct":
-                        raise Burned("imported key not by direct key reference")
-                    key = parsekey(action['actionParams']['key'])
-                    if action['actionParams'].get('exportable') == True:
-                        exportable = True
-                    else:
-                        exportable = False
-                    success = newkey(session, key, exportable)
-                    getkeydata(session, key, key.handles['public'])
-                    if key.keydata == None:
-                        success = False
-                    if success:
-                        symkey = Record(None)
-                        symkey.keyckaid = key.keyckaid
-                        symkey.keylabel = key.keylabel
-                        symkey.keyalgo  = "AES"
-                        symkey.keysize  = 1024
-                        success = newkey(session, key=symkey, exportable=True, ontoken=False)
-                        if success:
-                            action['cooked']['keyBlob'] = wrapkey(session, symkey, key, True)                
-                    action['cooked']['success'] = success
-                    if args_debug:
-                        action['cooked']['keyData'] = key.keydata
-                        if key.keysecretdata != None:
-                            action['cooked']['keySecretData'] = key.keysecretdata
-                        if key.keyckaid != None:
-                            action['cooked']['keyID'] = key.keyckaid
-                        if key.keylabel != None and key.keylabel != "":
-                            action['cooked']['keyLabel'] = key.keylabel
-                elif action['actionType'] in ('exportKeypair', 'exportKey'):
-                    if action['actionParams']['key']['keyType'] != "byRef":
-                        raise Burned("exported key not by key reference")
-                    key = parsekey(action['actionParams']['key'])
-                    if action['actionParams'].get('wrappingKey') == None:
-                        gethsmkeys(session, key)
-                        getkeydata(session, key, key.handles['private'], True, True)
-                        if args_debug:
-                            if key.keysecretdata != None:
-                                action['cooked']['keySecretData'] = key.keysecretdata
-                            if key.keydata != None:
-                                action['cooked']['keyData'] = key.keydata
-                        if key.keysecretdata != None:
-                            action['cooked']['keyBlob'] = key.keysecretdata
-                        action['cooked']['exportSuccess'] = True                    
-                    else:
-                        if action['actionParams']['wrappingKey']['keyType'] != "byRef":
-                            raise Burned("wrapping key not by key reference")
-                        wrappingkey = parsekey(action['actionParams']['wrappingKey'])
-                        action['cooked']['keyBlob'] = wrapkey(session, key, wrappingkey)
-                        action['cooked']['exportSuccess'] = True
+    recipecounter = 1
+    for action in recipe['actions']:
+        action['cooked'] = { }
+        try:
+            if action['actionType'] == "generateKey":
+                key = Record(action['actionParams'].get('owner'))
+                key.type = 'DNSKEY'
+                key.keytype  = action['actionParams'].get('keyFlags')
+                key.keyckaid = action['actionParams'].get('keyID')
+                key.keylabel = action['actionParams'].get('keyLabel')
+                if action['actionParams'].get('exportable') == True:
+                    exportable = True
                 else:
-                    raise Burned("unknown action "+action['actionType'])
-                recipecounter += 1
-            except KeyError as ex:
-                print("missing value for field"+ex.args[0]+" in recipe", file=sys.stderr)
+                    exportable = False
+                key.keyalgo  = action['actionParams']['keyAlgo']
+                key.keysize  = action['actionParams']['keySize']
+                success = newkey(key=key, exportable=exportable, ontoken=True)
+                action['cooked']['generateSuccess'] = success
+                action['cooked']['success'] = success
+                if args_debug:
+                    #action['cooked']['keyTag'] = key.getkeytag()
+                    if key.keyckaid != None:
+                        action['cooked']['keyID'] = key.keyckaid
+                    if key.keylabel != None and key.keylabel != "":
+                        action['cooked']['keyLabel'] = key.keylabel
+                    action['cooked']['keyData'] = key.keydata
+                    if key.keysecretdata != None:
+                        action['cooked']['keySecretData'] = key.keysecretdata
+            elif action['actionType'] == 'produceSignedKeyset':
+                ownername   = action['actionParams']['ownerName']
+                signername  = action['actionParams'].get('signerName')
+                inception   = action['actionParams']['inception']
+                expiration  = action['actionParams']['expiration']
+                ttl         = action['actionParams']['ttl']
+                keyset = [ ]
+                keys = [ ]
+                for params in action['actionParams']['keyset']:
+                    key = parsekey(params['key'])
+                    key.ttl   = ttl
+                    key.name = ownername
+                    gethsmkeys(key)
+                    keyset.append(key)
+                for params in action['actionParams']['signedBy']:
+                    key = parsekey(params['key'])
+                    if key.keydata == None:
+                        gethsmkeys(key)
+                        getkeydata(key, key.handles['public'])
+                    keys.append(key)
+                signedset = signkeyset(todatetime(inception), todatetime(expiration), keys, keyset, ttl, ownername, signername)
+                action['cooked']['signedKeysetRRs'] = signedset
+            elif action['actionType'] == 'haveKey':
+                key = parsekey(action['actionParams']['key'])
+                if not gethsmkeys(key):
+                    action['cooked']['exists'] = False
+                    if action['actionParams'].get('relaxed') != True:
+                        raise Burned("mandatory key {0} does not exist".format(key.location()))
+                else:
+                    action['cooked']['exists'] = True
+            elif action['actionType'] == 'deleteKey':
+                key = parsekey(action['actionParams']['key'])
+                if not gethsmkeys(key):
+                    if action['actionParams'].get('mustExist') == True:
+                        raise Burned("mandatory key {0} does not exist trying to delete".format(key.location()))
+                    else:
+                        # not able to seperate between key not there and key not deletable
+                        action['cooked']['deleteSuccess'] = False
+                else:
+                    success = deletekeys(key)
+                    action['cooked']['deleteSuccess'] = success
+                action['cooked']['success'] = success
+            elif action['actionType'] in ('importPublicKey', 'importKey', 'importKeypair'):
+                if action['actionParams']['key']['keyType'] != "direct":
+                    raise Burned("imported key not by direct key reference")
+                key = parsekey(action['actionParams']['key'])
+                if action['actionParams'].get('exportable') == True:
+                    exportable = True
+                else:
+                    exportable = False
+                success = newkey(key, exportable)
+                getkeydata(key, key.handles['public'])
+                if key.keydata == None:
+                    success = False
+                if success:
+                    symkey = Record(None)
+                    symkey.keyckaid = key.keyckaid
+                    symkey.keylabel = key.keylabel
+                    symkey.keyalgo  = "AES"
+                    symkey.keysize  = 1024
+                    success = newkey(key=symkey, exportable=True, ontoken=False)
+                    if success:
+                        action['cooked']['keyBlob'] = wrapkey(symkey, key, True)                
+                action['cooked']['success'] = success
+                if args_debug:
+                    action['cooked']['keyData'] = key.keydata
+                    if key.keysecretdata != None:
+                        action['cooked']['keySecretData'] = key.keysecretdata
+                    if key.keyckaid != None:
+                        action['cooked']['keyID'] = key.keyckaid
+                    if key.keylabel != None and key.keylabel != "":
+                        action['cooked']['keyLabel'] = key.keylabel
+            elif action['actionType'] in ('exportKeypair', 'exportKey'):
+                if action['actionParams']['key']['keyType'] != "byRef":
+                    raise Burned("exported key not by key reference")
+                key = parsekey(action['actionParams']['key'])
+                if action['actionParams'].get('wrappingKey') == None:
+                    gethsmkeys(key)
+                    getkeydata(key, key.handles['private'], True, True)
+                    if args_debug:
+                        if key.keysecretdata != None:
+                            action['cooked']['keySecretData'] = key.keysecretdata
+                        if key.keydata != None:
+                            action['cooked']['keyData'] = key.keydata
+                    if key.keysecretdata != None:
+                        action['cooked']['keyBlob'] = key.keysecretdata
+                        action['cooked']['exportSuccess'] = True 
+                    else:
+                    if action['actionParams']['wrappingKey']['keyType'] != "byRef":
+                        raise Burned("wrapping key not by key reference")
+                    wrappingkey = parsekey(action['actionParams']['wrappingKey'])
+                    action['cooked']['keyBlob'] = wrapkey(key, wrappingkey)
+                    action['cooked']['exportSuccess'] = True
+            else:
+                raise Burned("unknown action "+action['actionType'])
+            recipecounter += 1
+        except KeyError as ex:
+            print("missing value for field"+ex.args[0]+" in recipe", file=sys.stderr)
+            print("recipe step "+recipecounter+" failed")
+            recipecomplete = False
+            break
+        except pkcs11.exceptions.GeneralError as ex:
+            print("PKCS11 error", file=sys.stderr)
                 print("recipe step "+recipecounter+" failed")
-                recipecomplete = False
-                break
-            except pkcs11.exceptions.GeneralError as ex:
-                print("PKCS11 error", file=sys.stderr)
+            recipecomplete = False
+            break
+        except Burned as ex:
+            print(ex.message, file=sys.stderr)
                 print("recipe step "+recipecounter+" failed")
-                recipecomplete = False
-                break
-            except Burned as ex:
-                print(ex.message, file=sys.stderr)
-                print("recipe step "+recipecounter+" failed")
-                recipecomplete = False
-                break
+            recipecomplete = False
+            break
     with open(recipefile, "w") as file:
         recipe['preamble']['timestamp'] = tostrtime(now());
         hjson.dump(recipe, file)
@@ -1095,9 +1096,6 @@ def main():
     Main program that reads the configuration file, command line arguments and then decides between the
     different modes of the program.
     '''
-    global conf_repomodule
-    global conf_repolabel
-    global conf_repopin
     global kasp_refresh
     global kasp_validity
     global kasp_inceptionoffset
@@ -1108,6 +1106,7 @@ def main():
     global args_debug
     global args_recipedescription
     global args_until
+    global sessions
     try:
         opts, args = getopt.getopt(sys.argv[1:], "hdcr:i:", ["help","debug","config","recipe=","input=","now="])
     except getopt.GetoptError as err:
@@ -1138,35 +1137,77 @@ def main():
         conf = yaml.load(file, Loader=yaml.FullLoader)
         conf_version = conf['version']
         if conf.get('repository') != None:
-            conf_repomodule = str(conf['repository']['module'])
-            conf_repolabel  = str(conf['repository']['label'])
-            conf_repopin    = str(conf['repository']['pin'])
-        conf_reposmodule = { }
-        conf_reposlabel   = { }
-        conf_repospin     = { }
+            conf_reposmodule["default"] = str(conf['repository']['module'])
+            conf_reposlabel["default"]  = str(conf['repository']['label'])
+            conf_repospin["default"]    = str(conf['repository']['pin'])
+        repos = { }
+        nrepos = 0
         for confrepo in conf['repositories']:
             if isinstance(confrepo,str):
-                confreponame = confrepo
-                conf_reposmodule[confreponame] = str(conf['repositories'][confrepo]['module'])
-                conf_reposlabel[confreponame]  = str(conf['repositories'][confrepo]['label'])
-                conf_repospin[confreponame]    = str(conf['repositories'][confrepo]['pin'])
+                repo = confrepo
+                module = str(conf['repositories'][confrepo]['module'])
+                label  = str(conf['repositories'][confrepo]['label'])
+                pin    = str(conf['repositories'][confrepo]['pin'])
             else:
-                confreponame = next(iter(confrepo))
-                conf_reposmodule[confreponame] = str(confrepo['module'])
-                conf_reposlabel[confreponame]  = str(confrepo['label'])
-                conf_repospin[confreponame]    = str(confrepo['pin'])
-            if confreponame == "default":
-                conf_repomodule = conf_reposmodule[confreponame]
-                conf_repolabel  = conf_reposlabel[confreponame]
-                conf_repopin    = conf_repospin[confreponame]
-        kasp_refresh         = str(conf['kasp']['refresh'])
-        kasp_validity        = str(conf['kasp']['validity'])
-        kasp_inceptionoffset = str(conf['kasp']['inceptionoffset'])
-        kasp_ttl             = str(conf['kasp']['ttl'])
-        kasp_kskalgo         = str(conf['kasp']['ksk']['algo'])
-        kasp_ksksize         = str(conf['kasp']['ksk']['size'])
-        kasp_zskalgo         = str(conf['kasp']['zsk']['algo'])
-        kasp_zsksize         = str(conf['kasp']['zsk']['size'])
+                repo = next(iter(confrepo))
+                module = str(confrepo['module'])
+                label  = str(confrepo['label'])
+                pin    = str(confrepo['pin'])
+            if repos.get(module) == None:
+                repos[module] = { }
+            if repos[module].get(label) == None:
+                repos[module][label] = [ ]
+            repos[module][label].append({ 'name': repo, 'label': label, 'pin': pin })
+            nrepos += 1
+        if conf.get('kasp') != None:
+            kasp_refresh         = str(conf['kasp'].get('refresh'))
+            kasp_validity        = str(conf['kasp'].get('validity'))
+            kasp_inceptionoffset = str(conf['kasp'].get('inceptionoffset'))
+            kasp_ttl             = str(conf['kasp'].get('ttl'))
+            if conf['kasp'].get('ksk') != None:
+                kasp_kskalgo         = str(conf['kasp']['ksk'].get('algo'))
+                kasp_ksksize         = str(conf['kasp']['ksk'].get('size'))
+            if conf['kasp'].get('zsk') != None:
+                kasp_zskalgo         = str(conf['kasp']['zsk'].get('algo'))
+                kasp_zsksize         = str(conf['kasp']['zsk'].get('size'))
+        if conf.get('transport') != None:
+            if conf['transport'].get('key') != None:
+                conf_exchkeylabel  = conf['transport']['key'].get('label')
+                conf_exchkeyckaid  = conf['transport']['key'].get('ckaid')
+                conf_exchkeysize   = conf['transport']['key'].get('size')
+                if isinstance(conf_exchkeylabel, str):
+                    if conf_exchkeylabel == "":
+                        conf_exchkeylabel = None
+                else:
+                    conf_exchkeylabel = str(conf_exchkeylabel)
+                if isinstance(conf_exchkeyckaid, str):
+                    if conf_exchkeyckaid == "":
+                        conf_exchkeyckaid = None
+                else:
+                    conf_exchkeyckaid = str(conf_exchkeyckaid)
+                if isinstance(conf_exchkeysize, str):
+                    if conf_exchkeysize == "":
+                        conf_exchkeysize = None
+                    else:
+                        conf_exchkeysize = int(conf_exchkeysize)
+                elif not isinstance(conf_exchkeysize, NoneType) and not isinstance(conf_exchkeysize, int):
+                    conf_exchkeysize = int(conf_exchkeysize)
+    sessions = { }
+    for module in repos.keys():
+        try:
+            lib = pkcs11.lib(module)
+            for label in repos[module].keys():
+                token = lib.get_token(token_label=label)
+            pin = repos[module][label][0]['pin']
+            session = token.open(user_pin=pin, rw=True)
+            sessions[repo] = session
+        except pkcs11.exceptions.NoSuchToken:
+            print("Unable to access default token "+conf_repolabel, file=sys.stderr)
+            sys.exit(1)
+    if nrepos == 1:
+        repo = next(iter(sessions.keys()))
+        if repo != "default":
+            sessions["default"] = sessions[repo]
     if len(args) == 0:
         usage("no argument given")
         return 1
