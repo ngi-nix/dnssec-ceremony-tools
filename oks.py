@@ -714,37 +714,59 @@ def wrapkey(key, wrappingkey, wrapPublic=False):
     return base64.b64encode(bytes).decode()
 
 
-def unwrapkey(key, wrappingkey, bytes, unwrapPrivate=False):
+def unwraptemplate(key):
+    id    = key.getkeyckaid()
+    label = key.keylabel
+    template = { pkcs11.constants.Attribute.TOKEN: True,  pkcs11.constants.Attribute.PRIVATE: True }
+    if label != None:
+        template[pkcs11.constants.Attribute.LABEL] = label
+    if id != None:
+        template[pkcs11.constants.Attribute.ID] = id
+    template[pkcs11.constants.Attribute.CLASS]        = pkcs11.ObjectClass.PRIVATE_KEY
+    template[pkcs11.constants.Attribute.KEY_TYPE]     = pkcs11.KeyType.RSA
+    template[pkcs11.constants.Attribute.PRIVATE]      = True
+    template[pkcs11.constants.Attribute.DECRYPT]      = True
+    template[pkcs11.constants.Attribute.SIGN]         = False
+    template[pkcs11.constants.Attribute.UNWRAP]       = True
+    template[pkcs11.constants.Attribute.SENSITIVE]    = False
+    template[pkcs11.constants.Attribute.EXTRACTABLE]  = True
+    template[pkcs11.constants.Attribute.ENCRYPT]      = pkcs11.DEFAULT
+    template[pkcs11.constants.Attribute.WRAP]         = pkcs11.DEFAULT
+    template[pkcs11.constants.Attribute.VERIFY]       = pkcs11.DEFAULT
+    return template
+
+
+def unwrapsymkey(key, wrappingkey, bytes):
     gethsmkeys(wrappingkey)
     bytes = base64.b64decode(bytes)
-
-    id = key.getkeyckaid()
+    id    = key.getkeyckaid()
     label = key.keylabel
-    privtemplate = { pkcs11.constants.Attribute.TOKEN: True,  pkcs11.constants.Attribute.PRIVATE: True }
-    if label != None:
-        privtemplate[pkcs11.constants.Attribute.LABEL] = label
-    if id != None:
-        privtemplate[pkcs11.constants.Attribute.ID] = id
-    privtemplate[pkcs11.constants.Attribute.CLASS]        = pkcs11.ObjectClass.PRIVATE_KEY
-    privtemplate[pkcs11.constants.Attribute.KEY_TYPE]     = pkcs11.KeyType.RSA
-    privtemplate[pkcs11.constants.Attribute.TOKEN]        = False
-    privtemplate[pkcs11.constants.Attribute.PRIVATE]      = True
-    privtemplate[pkcs11.constants.Attribute.DECRYPT]      = True
-    privtemplate[pkcs11.constants.Attribute.SIGN]         = False
-    privtemplate[pkcs11.constants.Attribute.UNWRAP]       = True
-    privtemplate[pkcs11.constants.Attribute.SENSITIVE]    = False
-    privtemplate[pkcs11.constants.Attribute.EXTRACTABLE]  = True
-    privtemplate[pkcs11.constants.Attribute.ENCRYPT]      = pkcs11.DEFAULT
-    privtemplate[pkcs11.constants.Attribute.WRAP]         = pkcs11.DEFAULT
-    privtemplate[pkcs11.constants.Attribute.VERIFY]       = pkcs11.DEFAULT
+    template = unwraptemplate(key)
+    template[pkcs11.constants.Attribute.TOKEN] = False
+    wraphandle = wrappingkey.handles['private']
+    mechanism = pkcs11.mechanisms.Mechanism.RSA_PKCS
+    flags = pkcs11.constants.MechanismFlag.HW | pkcs11.constants.MechanismFlag.SIGN | pkcs11.constants.MechanismFlag.VERIFY
+    flags |= pkcs11.constants.MechanismFlag.DECRYPT
+    flags |= pkcs11.constants.MechanismFlag.UNWRAP | pkcs11.constants.MechanismFlag.DIGEST
+    keyhandle = wraphandle.unwrap_key(object_class=pkcs11.ObjectClass.PRIVATE_KEY,
+                                      key_type=pkcs11.KeyType.AES,
+                                      key_data=bytes,
+                                      label=label,
+                                      id=id,
+                                      template=privtemplate,
+                                      store=False,
+                                      capabilities=flags)
+    key.handles['secret']  = keyhandle
 
-    if unwrapPrivate:
-        wraphandle = wrappingkey.handles['private']
-        mechanism = pkcs11.mechanisms.Mechanism.RSA_PKCS
-        sys.exit(1)
-    else:
-        wraphandle = wrappingkey.handles['secret']
-        mechanism = pkcs11.mechanisms.Mechanism.AES_KEY_WRAP
+
+def unwrapasymkey(key, wrappingkey, bytes):
+    gethsmkeys(wrappingkey)
+    bytes = base64.b64decode(bytes)
+    id    = key.getkeyckaid()
+    label = key.keylabel
+    template = unwraptemplate(key)
+    wraphandle = wrappingkey.handles['secret']
+    mechanism = pkcs11.mechanisms.Mechanism.AES_KEY_WRAP
     flags = pkcs11.constants.MechanismFlag.HW | pkcs11.constants.MechanismFlag.SIGN | pkcs11.constants.MechanismFlag.VERIFY
     flags |= pkcs11.constants.MechanismFlag.DECRYPT
     flags |= pkcs11.constants.MechanismFlag.UNWRAP | pkcs11.constants.MechanismFlag.DIGEST
@@ -754,12 +776,9 @@ def unwrapkey(key, wrappingkey, bytes, unwrapPrivate=False):
                                       label=label,
                                       id=id,
                                       template=privtemplate,
-                                      store=False,
+                                      store=True,
                                       capabilities=flags)
-    if unwrapPrivate:
-        key.handles['secret']  = keyhandle
-    else:
-        key.handles['private'] = keyhandle
+    key.handles['private'] = keyhandle
 
 
 def byrefkey(key):
@@ -882,14 +901,14 @@ def producerecipe(zone, inputfile, outputfile):
             action['keyFlags'] = key.keytypenum()
             recipe['actions'].append({ "actionType": "haveKey", "actionParams": action })
 
-    key = Record(None)
-    key.keylabel = conf_exchkeylabel
-    key.keyckaid = conf_exchkeyckaid
-    key.keyalgo = "RSA"
-    key.keysize = conf_exchkeysize
-    newkey(key=key, exportable=True, ontoken=True)
-    getkeydata(key, key.handles['public'])
-    action = { "key": { "keyType": "direct",  "keyLabel": key.keylabel, "keyAlgo": key.keyalgo, "keySize": key.keysize, "keyData": key.keydata } }
+    wrapkey = Record(None)
+    wrapkey.keylabel = conf_exchkeylabel
+    wrapkey.keyckaid = conf_exchkeyckaid
+    wrapkey.keyalgo  = "AES"
+    wrapkey.keysize  = conf_exchkeysize
+    newkey(key=wrapkey, exportable=True, ontoken=True)
+    getkeydata(wrapkey, wrapkey.handles['public'])
+    action = { "key": directkey(wrapkey) }
     recipe['actions'].append({ "actionType": "importPublicKey", "actionParams": action })
 
     # In case KSK collover, generate a key for the zone
@@ -923,7 +942,7 @@ def producerecipe(zone, inputfile, outputfile):
     recipe['actions'].append({ "actionType": "generateKey", "actionParams": action })
 
     # And export the generated ZSK
-    action = { "key": byrefkey(key), "wrappingKey": { "keyType": "byRef", "keyLabel": "recipekey" } }
+    action = { "key": byrefkey(key), "wrappingKey": byrefkey(wrapkey) } }
     recipe['actions'].append({ "actionType": "exportKeypair", "actionParams": action })
 
     args_until = todatetime(args_until)
@@ -963,60 +982,13 @@ def producerecipe(zone, inputfile, outputfile):
         file.close()
 
 
-def consumerecipe(recipefile, publishtime=None):
-    global args_debug
+def consumerecipe(recipefile):
+    global conf_repomodule
+    global conf_repolabel
+    global conf_repopin
     with open(recipefile, "r") as file:
         recipe = hjson.load(file)
         file.close()
-    recipecounter = 1
-    recipecomplete = True
-    for action in recipe['actions']:
-        try:
-            if action['actionType'] == 'produceSignedKeyset':
-                signedset = action['cooked']['exportSuccess']
-                # find out the minimum inception time
-            elif action['actionType'] in ('importPublicKey') and action['cooked'].get('importSuccess'):
-                if action['cooked'].get('keyBlob') != None:
-                    key = wrappingkey = parsekey(action['actionParams']['key'])
-                    bytes = action['cooked']['keyBlob']
-                    bytes = base64.decode(bytes)
-                    unwrapkey(key, wrappingkey, bytes, True)
-            elif action['actionType'] in ('exportKeypair', 'exportKey') and action['cooked'].get('exportSuccess'):
-                if action['actionParams']['key']['keyType'] != "byRef":
-                    raise Burned("exported key not by key reference")
-                key = parsekey(action['actionParams']['key'])
-                wrappingkey = action['actionParams'].get('wrappingKey')
-                if wrappingkey == None:
-                    key.keysecretdata = action['cooked']['keyBlob']
-                    key.keydata = action['cooked']['keyData']
-                    newkey(key, False, True)
-                else:
-                    wrappingkey = parsekey(wrappingkey)
-                    bytes = action['cooked']['keyBlob']
-                    unwrapkey(key, wrappingkey, bytes)
-            else:
-                pass
-            recipecounter += 1
-        except KeyError as ex:
-            print("missing value for field "+ex.args[0]+" in recipe", file=sys.stderr)
-            print("recipe step "+str(recipecounter)+" failed")
-            recipecomplete = False
-            break
-        except pkcs11.exceptions.GeneralError as ex:
-            print("PKCS11 error", file=sys.stderr)
-            print("recipe step "+str(recipecounter)+" failed")
-            recipecomplete = False
-            break
-        except Burned as ex:
-            print(ex.message, file=sys.stderr)
-            print("recipe step "+str(recipecounter)+" failed")
-            recipecomplete = False
-            break
-    if recipecomplete:
-        print("Recipe completed.", file=sys.stderr)
-        return 0
-    else:
-        return 1
 
 
 def cookrecipe(recipefile):
