@@ -901,6 +901,16 @@ def producerecipe(zone, inputfile, outputfile):
             action['keyFlags'] = key.keytypenum()
             recipe['actions'].append({ "actionType": "haveKey", "actionParams": action })
 
+    wrapkey = Record(None)
+    wrapkey.keylabel = conf_exchkeylabel
+    wrapkey.keyckaid = conf_exchkeyckaid
+    wrapkey.keyalgo  = "AES"
+    wrapkey.keysize  = conf_exchkeysize
+    newkey(key=wrapkey, exportable=True, ontoken=True)
+    getkeydata(wrapkey, wrapkey.handles['public'])
+    action = { "key": directkey(wrapkey) }
+    recipe['actions'].append({ "actionType": "importPublicKey", "actionParams": action })
+
     # In case KSK collover, generate a key for the zone
     key = Record(zone)
     key.type     = 'DNSKEY'
@@ -930,6 +940,10 @@ def producerecipe(zone, inputfile, outputfile):
                'keySize': key.keysize }
     keys[key.keyckaid] = key
     recipe['actions'].append({ "actionType": "generateKey", "actionParams": action })
+
+    # And export the generated ZSK
+    action = { "key": byrefkey(key), "wrappingKey": byrefkey(wrapkey) } }
+    recipe['actions'].append({ "actionType": "exportKeypair", "actionParams": action })
 
     args_until = todatetime(args_until)
     now = now()
