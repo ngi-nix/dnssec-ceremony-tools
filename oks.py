@@ -17,6 +17,9 @@ import binascii
 import random
 
 # These parameters should come from a configuration file, the KASP configuration and command line arguments
+conf_exchkeysize=1024
+conf_exchkeylabel="recipekey"
+conf_exchkeyckaid=None
 kasp_refresh=None
 kasp_validity=None
 kasp_inceptionoffset=None
@@ -27,13 +30,14 @@ args_until=None
 args_now=None
 args_debug=None
 args_recipedescription=None
+args_interactive=False
 
 # Regular expressions used to match input
 duration_pattern=r"P((?P<years>\d+)Y)?((?P<months>\d+)M)?((?P<weeks>\d+)W)?((?P<days>\d+)D)?(T((?P<hours>\d+)H)?((?P<minuts>\d)+M)?((?P<seconds>\d+)S?)?)?"
 dnskey_pattern=r"(?P<zone>\S+)\s+(?P<ttl>\d+)\s+IN\s+DNSKEY\s+(?P<keytype>\d+)\s+3\s+(?P<keyalgo>\d+)\s+(?P<keydata>\S+)\s*(;.*id\s*=\s*(?P<keytag>\d+).*)?$"
 rrsig_pattern=r"(?P<zone>[^\s]+)\s+(?P<ttl>\d+)\s+IN\s+RRSIG\s+DNSKEY\s+(?P<sigalgo>\d+)\s+(?P<siglabels>\d+)\s+(?P<sigorigttl>\d+)\s+(?P<sigexpiration>\S+)\s+(?P<siginception>\S+)\s+(?P<keytag>\d+)\s+(?P<signame>\S+)\s+(?P<sigdata>\S+)$"
-datetime_pattern=r"(?P<year>\d\d\d\d)-?(?P<month>\d\d)-?(?P<day>\d\d) ?(?P<hour>\d\d):?(?P<minute>\d\d)[:.]?(?P<second>\d\d)"
-date_pattern=r"(?P<year>\d\d\d\d)-?(?P<month>\d\d)-?(?P<day>\d\d)"
+datetime_pattern=r"(?P<year>\d\d\d\d)-*(?P<month>\d\d)-*(?P<day>\d\d) (?P<hour>\d\d):?(?P<minute>\d\d)[:.]?(?P<second>\d\d)"
+date_pattern=r"(?P<year>\d\d\d\d)\-?s(?P<month>\d\d)\-?(?P<day>\d\d)"
 duration_pattern= re.compile(duration_pattern)
 dnskey_pattern=re.compile(dnskey_pattern, re.IGNORECASE)
 rrsig_pattern=re.compile(rrsig_pattern, re.IGNORECASE)
@@ -767,7 +771,6 @@ def readkeyset(filename):
                 key.keytype = m['keytype']
                 key.keyalgo = m['keyalgo']
                 key.keydata = m['keydata']
-                #if()
                 if m.get('keytag') != None and m.get('keytag') != "":
                     key.keytag = int(m['keytag'])
                 else:
@@ -789,6 +792,9 @@ def readkeyset(filename):
 
 
 def producerecipe(zone, inputfile, outputfile):
+    global conf_exchkeylabel
+    global conf_exchkeyckaid
+    global conf_exchkeysize
     global kasp_refresh
     global kasp_validity
     global kasp_inceptionoffset
@@ -1027,7 +1033,7 @@ def cookrecipe(recipefile):
                     if key.keysecretdata != None:
                         action['cooked']['keyBlob'] = key.keysecretdata
                         action['cooked']['exportSuccess'] = True 
-                    else:
+                else:
                     if action['actionParams']['wrappingKey']['keyType'] != "byRef":
                         raise Burned("wrapping key not by key reference")
                     wrappingkey = parsekey(action['actionParams']['wrappingKey'])
@@ -1058,6 +1064,9 @@ def cookrecipe(recipefile):
         file.close()
     if recipecomplete:
         print("Recipe completed.", file=sys.stderr)
+        return 0
+    else:
+        return 1
 
 
 def usage(message=None):
@@ -1068,14 +1077,18 @@ def usage(message=None):
     if message != None:
         print(sys.argv[0] + ": " + message, file=sys.stderr)
         print("", file=sys.stderr)
-    print("usage:  oks [ -h -d -c config -f recipe.json -i input -z zone  <command>", file=sys.stderr)
-    print("    where command is one of:", file=sys.stderr)
+    print("usage:  oks [ -h -d -c config -f recipe.json -i -v ] <command>", file=sys.stderr)
+    print("                          produce <zone> <until> <description> [ <input> ]")
+    print("                          cook")
+    print("                          consume [ import | <time> | now]")
+    print("                          consume [ import | <time> | now]")
+    print("", file=sys.stderr)
+    print("    the command is one of the produce, cook or consume variants which:", file=sys.stderr)
     print("    produce    produce a recipe for the specified zone with the optional", file=sys.stderr)
     print("               initial signed DNSKEY set in the zonefile (-i), a recipe for", file=sys.stderr)
     print("               signed keysets will be created for the specified until date", file=sys.stderr)
-    print("               with an additional description in the recipe", file=sys.stderr)
-    print("               additional arguments required:")
-    print("               produce <zone> <until> <description>")
+    print("               with an additional description in the recipe.  In case an input", file=sys.stderr)
+    print("               file is specified, these should contain the DNSKEY set as initial keyset", file=sys.stderr)
     print("    cook       process a recipe in a bunker environment executing all the", file=sys.stderr)
     print("               specified steps in the recipe and overwriting the file with", file=sys.stderr)
     print("               the cooked result", file=sys.stderr)
@@ -1084,8 +1097,7 @@ def usage(message=None):
     print("    -c config  specify an alternative oks.conf configuration file, otherwise", file=sys.stderr)
     print("               the configuration in the local directory is used", file=sys.stderr)
     print("    -d         operate in debug mode, not for use in production", file=sys.stderr)
-    print("    -z zone    zone name to operate on", file=sys.stderr)
-    print("    -i input   input filename containing DNSKEY set as initial keyset", file=sys.stderr)
+    print("    -i         run in interactive mode", file=sys.stderr)
     print("    -f recipe  alternate recipe file to produce or process, when not specified", file=sys.stderr)
     print("               recipe.json is used as filename", file=sys.stderr)
     print("", file=sys.stderr)
@@ -1096,6 +1108,9 @@ def main():
     Main program that reads the configuration file, command line arguments and then decides between the
     different modes of the program.
     '''
+    global conf_exchkeylabel
+    global conf_exchkeyckaid
+    global conf_exchkeysize
     global kasp_refresh
     global kasp_validity
     global kasp_inceptionoffset
@@ -1106,9 +1121,10 @@ def main():
     global args_debug
     global args_recipedescription
     global args_until
+    global args_interactive
     global sessions
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "hdcr:i:", ["help","debug","config","recipe=","input=","now="])
+        opts, args = getopt.getopt(sys.argv[1:], "hdc:r:i:", ["help","debug","config=","recipe=","interactive","now="])
     except getopt.GetoptError as err:
         usage(str(err))
         return 1
@@ -1126,8 +1142,8 @@ def main():
             configfile = a
         elif o in ("-r", "--recipe"):
             recipe = a
-        elif o in ("-i", "--input"):
-            inputfile = a
+        elif o in ("-i", "--interactive"):
+            args_interactive = True
         elif o in ("--now"):
             args_now = todatetime(a)
         else:
@@ -1212,19 +1228,21 @@ def main():
         usage("no argument given")
         return 1
     elif args[0] == "produce":
-        if len(args) != 4:
-            usage("too few arguments")
+        if len(args) != 4 and len(args) != 5:
+            usage("incorrect number of arguments")
             return 1
         inputzone = args[1]
         args_until = args[2]
         args_recipedescription = args[3]
+        if len(args) == 5:
+            inputfile = args[4]
         if inputfile == None:
             inputfile = inputzone
-        producerecipe(inputzone, inputfile, recipe)
+        return producerecipe(inputzone, inputfile, recipe)
     elif args[0] == "cook":
-        cookrecipe(recipe)
+        return cookrecipe(recipe)
     elif args[0] == "consume":
-        consumerecipe(recipe)
+        return consumerecipe(recipe)
     else:
         usage("unrecognized argument " + args[0])
         return 1
