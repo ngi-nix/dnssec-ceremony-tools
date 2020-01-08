@@ -31,13 +31,14 @@ args_now=None
 args_debug=None
 args_recipedescription=None
 args_interactive=False
+args_verbosity=0
 
 # Regular expressions used to match input
-duration_pattern=r"P((?P<years>\d+)Y)?((?P<months>\d+)M)?((?P<weeks>\d+)W)?((?P<days>\d+)D)?(T((?P<hours>\d+)H)?((?P<minuts>\d)+M)?((?P<seconds>\d+)S?)?)?"
-dnskey_pattern=r"(?P<zone>\S+)\s+(?P<ttl>\d+)\s+IN\s+DNSKEY\s+(?P<keytype>\d+)\s+3\s+(?P<keyalgo>\d+)\s+(?P<keydata>\S+)\s*(;.*id\s*=\s*(?P<keytag>\d+).*)?$"
-rrsig_pattern=r"(?P<zone>[^\s]+)\s+(?P<ttl>\d+)\s+IN\s+RRSIG\s+DNSKEY\s+(?P<sigalgo>\d+)\s+(?P<siglabels>\d+)\s+(?P<sigorigttl>\d+)\s+(?P<sigexpiration>\S+)\s+(?P<siginception>\S+)\s+(?P<keytag>\d+)\s+(?P<signame>\S+)\s+(?P<sigdata>\S+)$"
-datetime_pattern=r"(?P<year>\d\d\d\d)-*(?P<month>\d\d)-*(?P<day>\d\d) (?P<hour>\d\d):?(?P<minute>\d\d)[:.]?(?P<second>\d\d)"
-date_pattern=r"(?P<year>\d\d\d\d)\-?s(?P<month>\d\d)\-?(?P<day>\d\d)"
+duration_pattern=r'P((?P<years>\d+)Y)?((?P<months>\d+)M)?((?P<weeks>\d+)W)?((?P<days>\d+)D)?(T((?P<hours>\d+)H)?((?P<minuts>\d)+M)?((?P<seconds>\d+)S?)?)?'
+dnskey_pattern=r'(?P<zone>\S+)\s+(?P<ttl>\d+)\s+IN\s+DNSKEY\s+(?P<keyflags>\d+)\s+3\s+(?P<keyalgo>\d+)\s+(?P<keydata>\S+)\s*(;.*id\s*=\s*(?P<keytag>\d+).*)?$'
+rrsig_pattern=r'(?P<zone>[^\s]+)\s+(?P<ttl>\d+)\s+IN\s+RRSIG\s+DNSKEY\s+(?P<sigalgo>\d+)\s+(?P<siglabels>\d+)\s+(?P<sigorigttl>\d+)\s+(?P<sigexpiration>\S+)\s+(?P<siginception>\S+)\s+(?P<keytag>\d+)\s+(?P<signame>\S+)\s+(?P<sigdata>\S+)$'
+datetime_pattern=r'(?P<year>\d\d\d\d)-?(?P<month>\d\d)-?(?P<day>\d\d) (?P<hour>\d\d):?(?P<minute>\d\d)[:.]?(?P<second>\d\d)'
+date_pattern=r'(?P<year>\d\d\d\d)-?(?P<month>\d\d)-?(?P<day>\d\d)'
 duration_pattern= re.compile(duration_pattern)
 dnskey_pattern=re.compile(dnskey_pattern, re.IGNORECASE)
 rrsig_pattern=re.compile(rrsig_pattern, re.IGNORECASE)
@@ -76,7 +77,7 @@ class Record:
     name = None
     type = "DNSKEY"
     ttl = None
-    keytype = None
+    keyrole = None
     keydata = None
     keystore = None
     keyckaid = None
@@ -112,7 +113,7 @@ class Record:
             return int(self.type)
 
     def iskey(self):
-        if self.keytype != None:
+        if self.keyrole != None:
             return True
         else:
             return False
@@ -123,46 +124,50 @@ class Record:
     def keyalgostr(self):
         return str(self.keyalgo)
 
-    def keytypenum(self):
-        if isinstance(self.keytype, str):
-            if self.keytype.upper() == 'KSK' or equals(self.keytype, 257):
+    def keyrolenum(self):
+        if isinstance(self.keyrole, str):
+            if self.keyrole.upper() == 'KSK' or equals(self.keyrole, 257):
                 return 257
-            elif self.keytype.upper() == 'ZSK' or equals(self.keytype, 256):
+            elif self.keyrole.upper() == 'ZSK' or equals(self.keyrole, 256):
                 return 256
             else:
-                return int(self.keytype)
+                return int(self.keyrole)
+        elif self.keyrole == None:
+            return None
         else:
-            return int(self.keytype)
+            return int(self.keyrole)
 
-    def keytypestr(self):
-        if isinstance(self.keytype, str):
-            if self.keytype.upper() == 'KSK' or equals(self.keytype, 257):
+    def keyrolestr(self):
+        if isinstance(self.keyrole, str):
+            if self.keyrole.upper() == 'KSK' or equals(self.keyrole, 257):
                 return 'ksk'
-            elif self.keytype.upper() == 'ZSK' or equals(self.keytype, 256):
+            elif self.keyrole.upper() == 'ZSK' or equals(self.keyrole, 256):
                 return 'zsk'
             else:
-                return str(self.keytype)
+                return str(self.keyrole)
+        elif self.keyrole == None:
+            return None
         else:
-            return str(self.keytype)
+            return str(self.keyrole)
 
     def isksk(self):
-        if isinstance(self.keytype, str) and self.keytype.upper() == 'KSK':
+        if isinstance(self.keyrole, str) and self.keyrole.upper() == 'KSK':
             return True
-        elif equals(self.keytype, 257):
+        elif equals(self.keyrole, 257):
             return True
         else:
             return False
 
-    def isnativeksk(self):
-        if self.isksk() and self.keyonhsm:
+    def isnativekey(self):
+        if self.keyonhsm:
             return True
         else:
             return False
 
     def iszsk(self):
-        if isinstance(self.keytype, str) and self.keytype.upper() == 'ZSK':
+        if isinstance(self.keyrole, str) and self.keyrole.upper() == 'ZSK':
             return True
-        elif equals(self.keytype, 256):
+        elif equals(self.keyrole, 256):
             return True
         else:
             return False
@@ -224,7 +229,7 @@ class Record:
         s += self.typestr()
         s += "\t"
         if self.iskey():
-            s += str(self.keytypenum())
+            s += str(self.keyrolenum())
             s += " "
             s += str(3)
             s += " " 
@@ -234,10 +239,10 @@ class Record:
                 s += str(self.keydata, "ascii")
             else:
                 s += self.keydata;
-            s += " ;{id = " + str(self.getkeytag()) + " (" + self.keytypestr() + "), size = " + str(self.getkeysize()) + "b}"
+            s += " ;{id = " + str(self.getkeytag()) + " (" + self.keyrolestr() + "), size = " + str(self.getkeysize()) + "b}"
         else:
             first = True
-            for rdata in self.data:
+            for rdata in self.rdata:
                 if first:
                     first = False
                 else:
@@ -251,18 +256,6 @@ class Record:
                 else:
                     s += str(rdata)
         return s
-
-    def describe(self):
-        print("Record name=", end='')
-        print(self.name, end='')
-        print(" ttl=", end='')
-        print(self.ttl, end='')
-        print(" type=", end='')
-        print(self.type, end='')
-        print(" keytype/flags=", end='')
-        print(self.keytype, end='')
-        print(" keyalgo=", end='')
-        print(self.keyalgo)
 
     def bytes(self, onlyrdata=False):
         buffer = bytearray()
@@ -288,8 +281,8 @@ class Record:
             buffer.append((ttl>>8)  & 0xff)
             buffer.append(ttl       & 0xff)
         # RDATA parts: keyflags, keyproto, keyalgo
-        buffer.append((self.keytypenum()>>8) & 0xff)
-        buffer.append((self.keytypenum())    & 0xff)
+        buffer.append((self.keyrolenum()>>8) & 0xff)
+        buffer.append((self.keyrolenum())    & 0xff)
         buffer.append(3                 & 0xff)
         buffer.append(self.keyalgonum() & 0xff)
         size = 0
@@ -385,12 +378,11 @@ def duration_incr(dt, duration, add=True):
     delta['days']    += dt.day
 
     delta['years']   += int((dt.month-1  + delta['months']) / 12)
-    delta['months']  +=     (dt.month-1  + delta['months']) % 12
-    if(delta['months'] < 0):
+    delta['months']   =     (dt.month-1  + delta['months']) % 12
+    if delta['months'] < 0:
         delta['months'] += 12
         delta['years'] -= 1
     delta['years']   += dt.year
-
     return datetime.datetime(delta['years'], delta['months'] + 1, delta['days'],
                              delta['hours'], delta['minutes'], delta['seconds'])
 
@@ -403,7 +395,7 @@ def duration_decr(dt, duration):
 def signkey(inception, expiration, key, keys, ttl, ownername, signername=None):
     if signername == None:
         signername = ownername
-    sigalgo = key.keyalgo
+    sigalgo = int(key.keyalgo)
     sigover = 'DNSKEY'
     siglabels = 0
     signame = signername
@@ -412,7 +404,7 @@ def signkey(inception, expiration, key, keys, ttl, ownername, signername=None):
     rrsig = Record(ownername)
     rrsig.type = 'RRSIG'
     rrsig.ttl = sigttl
-    rrsig.data = [ sigover, sigalgo, siglabels, sigttl, expiration, inception, key.getkeytag(), signame ]
+    rrsig.rdata = [ sigover, sigalgo, siglabels, sigttl, expiration, inception, key.getkeytag(), signame ]
 
     # Build the sign buffer
     buffer = bytearray()
@@ -458,7 +450,7 @@ def signkey(inception, expiration, key, keys, ttl, ownername, signername=None):
     digest = session.digest(bytes(buffer), mechanism=pkcs11.mechanisms.Mechanism.SHA256)
     gethsmkeys(key)
     signature = key.handles['private'].sign(digest)
-    rrsig.data.append(signature)
+    rrsig.rdata.append(signature)
     return rrsig
 
 
@@ -541,7 +533,7 @@ def newkey(key, exportable=False, ontoken=True):
         # template[pkcs11.constants.Attribute.ID] = id
         pubtemplate[pkcs11.constants.Attribute.ID]  = id
         privtemplate[pkcs11.constants.Attribute.ID] = id
-    if label != None and id != None:
+    if label == None and id == None:
         raise Burned("No label or id specified")
         success = False
         return success
@@ -700,16 +692,19 @@ def deletekeys(key):
 
 
 def wrapkey(key, wrappingkey, wrapPublic=False):
-    gethsmkeys(key)
-    gethsmkeys(wrappingkey)
-    if wrapPublic:
-        wraphandle = wrappingkey.handles['public']
-        keyhandle  = key.handles['secret']
-        mechanism = pkcs11.mechanisms.Mechanism.RSA_PKCS
-    else:
-        wraphandle = wrappingkey.handles['secret']
-        keyhandle  = key.handles['private']
-        mechanism = pkcs11.mechanisms.Mechanism.AES_KEY_WRAP
+    try:
+        gethsmkeys(key)
+        gethsmkeys(wrappingkey)
+        if wrapPublic:
+            wraphandle = wrappingkey.handles['public']
+            keyhandle  = key.handles['secret']
+            mechanism = pkcs11.mechanisms.Mechanism.RSA_PKCS
+        else:
+            wraphandle = wrappingkey.handles['secret']
+            keyhandle  = key.handles['private']
+            mechanism = pkcs11.mechanisms.Mechanism.AES_KEY_WRAP
+    except KeyError as ex:
+        raise Burned("key not found")
     bytes = wraphandle.wrap_key(keyhandle, mechanism=mechanism)
     return base64.b64encode(bytes).decode()
 
@@ -765,6 +760,7 @@ def unwrapasymkey(key, wrappingkey, bytes):
     id    = key.getkeyckaid()
     label = key.keylabel
     template = unwraptemplate(key)
+    template[pkcs11.constants.Attribute.TOKEN] = True
     wraphandle = wrappingkey.handles['secret']
     mechanism = pkcs11.mechanisms.Mechanism.AES_KEY_WRAP
     flags = pkcs11.constants.MechanismFlag.HW | pkcs11.constants.MechanismFlag.SIGN | pkcs11.constants.MechanismFlag.VERIFY
@@ -775,7 +771,7 @@ def unwrapasymkey(key, wrappingkey, bytes):
                                       key_data=bytes,
                                       label=label,
                                       id=id,
-                                      template=privtemplate,
+                                      template=template,
                                       store=True,
                                       capabilities=flags)
     key.handles['private'] = keyhandle
@@ -789,6 +785,10 @@ def byrefkey(key):
         dict['keyID'] = key.keyckaid
     if not key.keylabel == None:
         dict['keyLabel'] = key.keylabel
+    if not key.keyrole == None:
+        dict['keyFlags'] = key.keyrole
+    if not key.keyalgo == None:
+        dict['keyAlgo'] = key.keyalgo
     if key.keyckaid == None and key.keylabel == None:
         if key.keytag != None or key.keydata != None:
             dict['keyLabel'] = key.getkeytag()
@@ -798,8 +798,15 @@ def byrefkey(key):
 def directkey(key):
     dict = { 'keyType' : "direct" }
     dict['keyAlgo'] = key.keyalgo
-    dict['keyFlags'] = key.keytypenum()
+    if key.keyrolenum() != None:
+        dict['keyFlags'] = key.keyrolenum()
+    if key.keyalgo != None:
+        dict['keyAlgo'] = key.keyalgo
     dict['keyData'] = key.keydata
+    if key.keylabel != None:
+        dict['keyLabel'] = key.keylabel
+    if key.keyckaid != None:
+        dict['keyID'] = key.keyckaid
     return dict
 
 
@@ -808,7 +815,7 @@ def parsekey(params):
     if params.get('keyAlgo') != None:
         key.keyalgo = params['keyAlgo']
     if params.get('keyFlags') != None:
-        key.keytype = params['keyFlags']
+        key.keyrole = params['keyFlags']
     if params.get('keySecretData'):
         key.keysecretdata = params['keySecretData']
     if params.get('keyData'):
@@ -835,7 +842,7 @@ def readkeyset(filename):
                 key = Record(m['zone'])
                 key.ttl = int(m['ttl'])
                 key.type = 'DNSKEY'
-                key.keytype = m['keytype']
+                key.keyrole = m['keyrole']
                 key.keyalgo = m['keyalgo']
                 key.keydata = m['keydata']
                 if m.get('keytag') != None and m.get('keytag') != "":
@@ -898,13 +905,13 @@ def producerecipe(zone, inputfile, outputfile):
             # could add configuration/cli parameter to output flags/algo by name
             action = byrefkey(key)
             action['keyAlgo'] = key.keyalgo
-            action['keyFlags'] = key.keytypenum()
+            action['keyFlags'] = key.keyrolenum()
             recipe['actions'].append({ "actionType": "haveKey", "actionParams": action })
 
     wrapkey = Record(None)
     wrapkey.keylabel = conf_exchkeylabel
     wrapkey.keyckaid = conf_exchkeyckaid
-    wrapkey.keyalgo  = "AES"
+    wrapkey.keyalgo  = "RSA"
     wrapkey.keysize  = conf_exchkeysize
     newkey(key=wrapkey, exportable=True, ontoken=True)
     getkeydata(wrapkey, wrapkey.handles['public'])
@@ -914,13 +921,13 @@ def producerecipe(zone, inputfile, outputfile):
     # In case KSK collover, generate a key for the zone
     key = Record(zone)
     key.type     = 'DNSKEY'
-    key.keytype  = 'KSK'
+    key.keyrole  = 'KSK'
     key.keyalgo  = kasp_kskalgo
     key.keylabel = None
     key.keysize  = kasp_ksksize
     key.keyckaid = "hex " + binascii.b2a_hex(random.getrandbits(128).to_bytes(16,byteorder='big')).decode()
     action = { 'keyAlgo': key.keyalgonum(),
-               'keyFlags' : key.keytypenum(),
+               'keyFlags' : key.keyrolenum(),
                'keyID': key.keyckaid,
                'keySize': key.keysize }
     keys[key.keyckaid] = key
@@ -929,20 +936,20 @@ def producerecipe(zone, inputfile, outputfile):
     # Also introduce ZSK
     key = Record(zone)
     key.type     = 'DNSKEY'
-    key.keytype  = 'ZSK'
+    key.keyrole  = 'ZSK'
     key.keyalgo  = kasp_zskalgo
     key.keylabel = None
     key.keysize  = kasp_zsksize
     key.keyckaid = "hex " + binascii.b2a_hex(random.getrandbits(128).to_bytes(16,byteorder='big')).decode()
     action = { 'keyAlgo': key.keyalgonum(),
-               'keyFlags' : key.keytypenum(),
+               'keyFlags' : key.keyrolenum(),
                'keyID': key.keyckaid,
                'keySize': key.keysize }
     keys[key.keyckaid] = key
     recipe['actions'].append({ "actionType": "generateKey", "actionParams": action })
 
     # And export the generated ZSK
-    action = { "key": byrefkey(key), "wrappingKey": byrefkey(wrapkey) } }
+    action = { "key": byrefkey(key), "wrappingKey": byrefkey(wrapkey) }
     recipe['actions'].append({ "actionType": "exportKeypair", "actionParams": action })
 
     args_until = todatetime(args_until)
@@ -957,13 +964,16 @@ def producerecipe(zone, inputfile, outputfile):
             keysetksk = [ ] # The keys that are signing
             for key in keys.values():
                 if key.iszsk():
-                    keysetall.append(directkey(key))
-                elif not key.isnativeksk():
-                    keysetall.append(directkey(key))
+                    if key.isnativekey():
+                        keysetall.append({ "key": byrefkey(key) })
+                    else:
+                        keysetall.append({ "key": directkey(key) })
+                elif not key.isnativekey():
+                    keysetall.append({ "key": directkey(key) })
                 elif key.isksk():
-                    keysetall.append(byrefkey(key))
-                    keysetksk.append(byrefkey(key))
-            action = {'inception': tostrtime(inception), 'expiration': tostrtime(expiration), 'ttl': 60, 'Keyset': keysetall, 'signedBy': keysetksk }
+                    keysetall.append({ "key": byrefkey(key) })
+                    keysetksk.append({ "key": byrefkey(key) })
+            action = {'ownerName': zone, 'inception': tostrtime(inception), 'expiration': tostrtime(expiration), 'ttl': 60, 'keyset': keysetall, 'signedBy': keysetksk }
             recipe['actions'].append({ "actionType": "produceSignedKeyset", "actionParams": action })
         else:
             step = duration_decr(expiration,kasp_refresh)
@@ -971,7 +981,7 @@ def producerecipe(zone, inputfile, outputfile):
             now = step
 
     for key in keys.values():
-        if key.isnativeksk():
+        if key.isksk() and key.isnativekey():
             action = { 'key' : byrefkey(key) }
             action['mustExist'] = False
             recipe['actions'].append({ "actionType": "deleteKey", "actionParams": action })   
@@ -992,14 +1002,14 @@ def consumerecipe(recipefile, publishtime=None):
     for action in recipe['actions']:
         try:
             if action['actionType'] == 'produceSignedKeyset':
-                signedset = action['cooked']['exportSuccess']
+                pass
                 # find out the minimum inception time
             elif action['actionType'] in ('importPublicKey') and action['cooked'].get('importSuccess'):
                 if action['cooked'].get('keyBlob') != None:
                     key = wrappingkey = parsekey(action['actionParams']['key'])
                     bytes = action['cooked']['keyBlob']
                     bytes = base64.decode(bytes)
-                    unwrapkey(key, wrappingkey, bytes, True)
+                    unwrapsymkey(key, wrappingkey, bytes)
             elif action['actionType'] in ('exportKeypair', 'exportKey') and action['cooked'].get('exportSuccess'):
                 if action['actionParams']['key']['keyType'] != "byRef":
                     raise Burned("exported key not by key reference")
@@ -1012,7 +1022,7 @@ def consumerecipe(recipefile, publishtime=None):
                 else:
                     wrappingkey = parsekey(wrappingkey)
                     bytes = action['cooked']['keyBlob']
-                    unwrapkey(key, wrappingkey, bytes)
+                    unwrapasymkey(key, wrappingkey, bytes)
             else:
                 pass
             recipecounter += 1
@@ -1053,7 +1063,7 @@ def cookrecipe(recipefile):
             if action['actionType'] == "generateKey":
                 key = Record(action['actionParams'].get('owner'))
                 key.type = 'DNSKEY'
-                key.keytype  = action['actionParams'].get('keyFlags')
+                key.keyrole  = action['actionParams'].get('keyFlags')
                 key.keyckaid = action['actionParams'].get('keyID')
                 key.keylabel = action['actionParams'].get('keyLabel')
                 if action['actionParams'].get('exportable') == True:
@@ -1176,16 +1186,22 @@ def cookrecipe(recipefile):
             print("Missing value for field {} in recipe".format(ex.args[0]), file=sys.stderr)
             print(f"Recipe step {recipecounter} failed")
             recipecomplete = False
+            if args_debug:
+                raise ex
             break
         except pkcs11.exceptions.GeneralError as ex:
             print("PKCS11 error", file=sys.stderr)
             print(f"Recipe step {recipecounter} failed")
             recipecomplete = False
+            if args_debug:
+                raise ex
             break
         except Burned as ex:
             print(ex.message, file=sys.stderr)
             print(f"Recipe step {recipecounter} failed")
             recipecomplete = False
+            if args_debug:
+                raise ex
             break
     with open(recipefile, "w") as file:
         recipe['preamble']['timestamp'] = tostrtime(now());
@@ -1252,9 +1268,15 @@ def main():
     global args_recipedescription
     global args_until
     global args_interactive
+    global args_verbosity
     global sessions
+
+    '''
+    Parse options from the command line and set default values.
+    TODO: better checking of the possible options
+    '''
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "hdc:r:i:", ["help","debug","config=","recipe=","interactive","now="])
+        opts, args = getopt.getopt(sys.argv[1:], "hdc:r:i:v", ["help","debug","config=","recipe=","interactive","verbose","verbosity=","now="])
     except getopt.GetoptError as err:
         usage(str(err))
         return 1
@@ -1274,11 +1296,25 @@ def main():
             recipe = a
         elif o in ("-i", "--interactive"):
             args_interactive = True
+        elif o in ("-v", "--verbose"):
+            args_verbosity += 1
+        elif o in ("--verbosity"):
+            args_verbosity += int(a)
         elif o in ("--now"):
             args_now = todatetime(a)
         else:
             usage("unhhandled option "+o)
             return 1
+    '''
+    Parse the configuration file.  There is no default location is used for
+    the configuration file, but the current working directory is used, or
+    an explicit location in case of a command line option (-c or --config).
+    This is by design, this program isn't expected to be installed but
+    directly used from whichever location is it put in.
+    TODO: some paramters are required but no check is made whether it is
+          present, leading to an exception rather then a message.  Also the
+          type of any parameter isn't checked properly.
+    '''
     with open(configfile) as file:
         conf = yaml.load(file, Loader=yaml.FullLoader)
         conf_version = conf['version']
@@ -1336,8 +1372,23 @@ def main():
                         conf_exchkeysize = None
                     else:
                         conf_exchkeysize = int(conf_exchkeysize)
-                elif not isinstance(conf_exchkeysize, NoneType) and not isinstance(conf_exchkeysize, int):
+                elif conf_exchkeysize != None and not isinstance(conf_exchkeysize, int):
                     conf_exchkeysize = int(conf_exchkeysize)
+    '''
+    Initialize the sessions to the HSM, going over all the specified tokens in
+    the confiuration file and opening a read-write session to all of them.
+    Note that you cannot open a session to the same token twice, and that
+    initializing the library of the pkcs11 interface twice might lead to
+    problems as well.  Hence we need to first order the configured tokens per
+    library and token label as well such that we do not perform a open session
+    twice, especially not for the default token).  Make sure there is a default
+    token as well if there is only one token specified.
+    TODO: It could be that some sessions aren't needed for the action
+          requested, or that only a read only session would suffice.  This
+          would only be known after processing the recipe with the specified
+          action though and as such is it preferred at the moment that the
+          users specifies the correct sessions in the configuration file.
+    '''
     sessions = { }
     for module in repos.keys():
         try:
@@ -1354,6 +1405,10 @@ def main():
         repo = next(iter(sessions.keys()))
         if repo != "default":
             sessions["default"] = sessions[repo]
+
+    '''
+    Drop into the actual actions that need to be performed.
+    '''
     if len(args) == 0:
         usage("no argument given")
         return 1
@@ -1378,7 +1433,10 @@ def main():
         return 1
     return 0
 
-
+'''
+Main program, In principe this module could be used from another program in
+which case no action is taken unless a method is explicitly called.
+'''
 if __name__ == "__main__":
     result = main()
     if result != 0:
