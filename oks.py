@@ -16,7 +16,9 @@ import base64
 import binascii
 import random
 
-# These parameters should come from a configuration file, the KASP configuration and command line arguments
+'''
+These parameters should come from a configuration file, the KASP configuration and command line arguments
+'''
 conf_exchkeysize=1024
 conf_exchkeylabel="recipekey"
 conf_exchkeyckaid=None
@@ -33,7 +35,9 @@ args_recipedescription=None
 args_interactive=False
 args_verbosity=0
 
-# Regular expressions used to match input
+'''
+Regular expressions used to match input
+'''
 duration_pattern=r'P((?P<years>\d+)Y)?((?P<months>\d+)M)?((?P<weeks>\d+)W)?((?P<days>\d+)D)?(T((?P<hours>\d+)H)?((?P<minuts>\d)+M)?((?P<seconds>\d+)S?)?)?'
 dnskey_pattern=r'(?P<zone>\S+)\s+(?P<ttl>\d+)\s+IN\s+DNSKEY\s+(?P<keyflags>\d+)\s+3\s+(?P<keyalgo>\d+)\s+(?P<keydata>\S+)\s*(;.*id\s*=\s*(?P<keytag>\d+).*)?$'
 rrsig_pattern=r'(?P<zone>[^\s]+)\s+(?P<ttl>\d+)\s+IN\s+RRSIG\s+DNSKEY\s+(?P<sigalgo>\d+)\s+(?P<siglabels>\d+)\s+(?P<sigorigttl>\d+)\s+(?P<sigexpiration>\S+)\s+(?P<siginception>\S+)\s+(?P<keytag>\d+)\s+(?P<signame>\S+)\s+(?P<sigdata>\S+)$'
@@ -286,6 +290,8 @@ class Record:
         buffer.append(3                 & 0xff)
         buffer.append(self.keyalgonum() & 0xff)
         size = 0
+        if self.keydata == None:
+            getkeydata(self, self.handles['public'])
         if isinstance(self.keydata, (bytes,bytearray)):
             size = len(self.keydata)
             buffer.append(size >> 8)
@@ -297,9 +303,10 @@ class Record:
                 buffer.append(ch)
         return buffer
 
-
-# Convert string to datetime object
 def todatetime(str):
+    '''
+    Convert string to datetime object
+    '''
     m = datetime_pattern.match(str)
     if(m):
         dict = m.groupdict()
@@ -323,8 +330,10 @@ def tointtime(dt):
     return int(dt.timestamp())
 
 
-# Convert string to duration pattern (a dict or int)
 def toduration(str):
+    '''
+    Convert string to duration pattern (a dict or int).
+    '''
     duration = { }
     m = duration_pattern.match(str)
     if(m):
@@ -337,8 +346,10 @@ def toduration(str):
         return int(str)
 
 
-# increase a datetime with a duration, returning the resulting datetime object
 def duration_incr(dt, duration, add=True):
+    '''
+    Increase a datetime with a duration, returning the resulting datetime object.
+    '''
     delta = { 'years':0,  'months':0, 'days':0, 'hours':0, 'minutes':0, 'seconds':0, 'weeks':0 }
     delta = { **delta, **duration }
     delta['days'] += duration.get('weeks', 0);
@@ -387,8 +398,10 @@ def duration_incr(dt, duration, add=True):
                              delta['hours'], delta['minutes'], delta['seconds'])
 
 
-# decrament a datetime with a duration, returning the resulting datetime object
 def duration_decr(dt, duration):
+    '''
+    Decrament a datetime with a duration, returning the resulting datetime object.
+    '''
     return duration_incr(dt, duration, False)
 
 
@@ -456,7 +469,6 @@ def signkey(inception, expiration, key, keys, ttl, ownername, signername=None):
 
 def signkeyset(inception, expiration, keys, keyset, ttl, ownername, signername=None):
     records = ""
-    # TODO sort the keyset such that the order is correct
     for key in keyset:
         key.ttl = ttl
         getkeydata(key, key.handles['public'])
@@ -526,11 +538,11 @@ def newkey(key, exportable=False, ontoken=True):
     id = key.getkeyckaid()
     label = key.keylabel
     if label != None:
-        # template[pkcs11.constants.Attribute.LABEL] = label
+        template[pkcs11.constants.Attribute.LABEL] = label
         pubtemplate[pkcs11.constants.Attribute.LABEL]  = label
         privtemplate[pkcs11.constants.Attribute.LABEL] = label
     if id != None:
-        # template[pkcs11.constants.Attribute.ID] = id
+        template[pkcs11.constants.Attribute.ID] = id
         pubtemplate[pkcs11.constants.Attribute.ID]  = id
         privtemplate[pkcs11.constants.Attribute.ID] = id
     if label == None and id == None:
@@ -538,7 +550,6 @@ def newkey(key, exportable=False, ontoken=True):
         success = False
         return success
 
-    #template[pkcs11.constants.Attribute.TRUSTED]        = True
     template[pkcs11.constants.Attribute.CLASS]        = pkcs11.ObjectClass.SECRET_KEY
     template[pkcs11.constants.Attribute.KEY_TYPE]     = pkcs11.KeyType.AES
     template[pkcs11.constants.Attribute.TOKEN]        = True
@@ -547,10 +558,10 @@ def newkey(key, exportable=False, ontoken=True):
     template[pkcs11.constants.Attribute.DECRYPT]      = True
     template[pkcs11.constants.Attribute.WRAP]         = True
     template[pkcs11.constants.Attribute.UNWRAP]       = True
-    #if importkey:
-    #    template[pkcs11.constants.Attribute.SECRET] = base64.b64decode(key.keysecretdata)
     template[pkcs11.constants.Attribute.EXTRACTABLE] = True
     template[pkcs11.constants.Attribute.SENSITIVE] = False
+    if importkey:
+        template[pkcs11.constants.Attribute.SECRET] = base64.b64decode(key.keysecretdata)
 
     pubtemplate[pkcs11.constants.Attribute.CLASS]          = pkcs11.ObjectClass.PUBLIC_KEY
     pubtemplate[pkcs11.constants.Attribute.KEY_TYPE]       = pkcs11.KeyType.RSA
@@ -560,7 +571,6 @@ def newkey(key, exportable=False, ontoken=True):
     pubtemplate[pkcs11.constants.Attribute.VERIFY]         = True
     pubtemplate[pkcs11.constants.Attribute.VERIFY_RECOVER] = True
     pubtemplate[pkcs11.constants.Attribute.WRAP]           = True
-    #pubtemplate[pkcs11.constants.Attribute.TRUSTED]        = True
     if importpubkey:
         ( modulus, exponent ) = decomposekeydata(base64.b64decode(key.keydata))
         key.keydata = base64.b64encode(composekeydata(modulus, exponent)).decode()
@@ -615,15 +625,12 @@ def newkey(key, exportable=False, ontoken=True):
                 key.handles['public'] = pubkey
         key.ckakeyid = pubkey.id
         key.keylabel = pubkey.label
-        #getkeydata(session, key, pubkey)
-        #if importprivkey:
-        #    getkeydata(session, key, privkey, False, exportable)
 
-    #if label == None:
-    #    keylabel = str(key.getkeytag())
-    #    pubkey.label = keylabel
-    #    privkey.label = keylabel
-    #    key.keylabel = keylabel
+    if label == None:
+        keylabel = str(key.getkeytag())
+        pubkey.label = keylabel
+        privkey.label = keylabel
+        key.keylabel = keylabel
     return success
 
 
@@ -916,7 +923,7 @@ def producerecipe(zone, inputfile, outputfile):
     newkey(key=wrapkey, exportable=True, ontoken=True)
     getkeydata(wrapkey, wrapkey.handles['public'])
     action = { "key": directkey(wrapkey) }
-    recipe['actions'].append({ "actionType": "importPublicKey", "actionParams": action })
+    recipe['actions'].append({ "actionType": "importPublicKey", "actionParams": action, 'actionDescription': "Process key used in migration keys from Bunker to operational environment" })
 
     # In case KSK collover, generate a key for the zone
     key = Record(zone)
@@ -931,7 +938,7 @@ def producerecipe(zone, inputfile, outputfile):
                'keyID': key.keyckaid,
                'keySize': key.keysize }
     keys[key.keyckaid] = key
-    recipe['actions'].append({ "actionType": "generateKey", "actionParams": action })
+    recipe['actions'].append({ "actionType": "generateKey", "actionParams": action, "actionDescrption": "Generation key used for next KSK" })
 
     # Also introduce ZSK
     key = Record(zone)
@@ -946,11 +953,11 @@ def producerecipe(zone, inputfile, outputfile):
                'keyID': key.keyckaid,
                'keySize': key.keysize }
     keys[key.keyckaid] = key
-    recipe['actions'].append({ "actionType": "generateKey", "actionParams": action })
+    recipe['actions'].append({ "actionType": "generateKey", "actionParams": action, "actionDescription": "Generation key used for next ZSK" })
 
     # And export the generated ZSK
     action = { "key": byrefkey(key), "wrappingKey": byrefkey(wrapkey) }
-    recipe['actions'].append({ "actionType": "exportKeypair", "actionParams": action })
+    recipe['actions'].append({ "actionType": "exportKeypair", "actionParams": action, "actionDescription": "Export key {key} encrypted using {wrappingKey}" })
 
     args_until = todatetime(args_until)
     now = now()
@@ -994,6 +1001,8 @@ def producerecipe(zone, inputfile, outputfile):
 
 def consumerecipe(recipefile, publishtime=None):
     global args_debug
+    global args_interactive
+    global args_verbosity
     with open(recipefile, "r") as file:
         recipe = hjson.load(file)
         file.close()
@@ -1050,15 +1059,36 @@ def consumerecipe(recipefile, publishtime=None):
 
 def cookrecipe(recipefile):
     global args_debug
+    global args_verbosity
+    global args_interactive
     keys = { }
     with open(recipefile, "r") as file:
-        #recipe = json.load(file,ignore_comments=False,preserve_order=True)
         recipe = hjson.load(file)
         file.close()
     recipecomplete = True
     recipecounter = 1
+    if args_verbosity > 0:
+        print("Recipe {0} generated at {1}".format(recipe['preamble']['description'],recipe['preamble']['timestamp']))
+    if args_interactive:
+        input('START--> ')  
+        print("")
     for action in recipe['actions']:
         action['cooked'] = { }
+        if args_verbosity > 0:
+            description = ""
+            if action.get('actionDescription') != None:
+                description = action.get('actionDescription')
+            else:
+                description = action['actionType']
+            args = { 'key': "", 'wrappingKey': "" }
+            if action['actionParams'].get('keyID')    != None:  args['key'] += action['actionParams'].get('keyID')
+            if action['actionParams'].get('keyLabel') != None:  args['key'] += action['actionParams'].get('keyLabel')
+            if action['actionParams'].get('key',{}).get('keyID')          != None:  args['key'] += action['actionParams'].get('key',{}).get('keyID')
+            if action['actionParams'].get('wrappingKey',{}).get('keyID')  != None:  args['key'] += action['actionParams'].get('wrappingKey',{}).get('keyID')
+            try:
+                print(f"Recipe step {recipecounter}: {description}".format(**args))
+            except ( KeyError, TypeError ) as ex:
+                pass
         try:
             if action['actionType'] == "generateKey":
                 key = Record(action['actionParams'].get('owner'))
@@ -1076,7 +1106,7 @@ def cookrecipe(recipefile):
                 action['cooked']['generateSuccess'] = success
                 action['cooked']['success'] = success
                 if args_debug:
-                    #action['cooked']['keyTag'] = key.getkeytag()
+                    action['cooked']['keyTag'] = key.getkeytag()
                     if key.keyckaid != None:
                         action['cooked']['keyID'] = key.keyckaid
                     if key.keylabel != None and key.keylabel != "":
@@ -1120,7 +1150,7 @@ def cookrecipe(recipefile):
                     if action['actionParams'].get('mustExist') == True:
                         raise Burned("mandatory key {0} does not exist trying to delete".format(key.location()))
                     else:
-                        # not able to seperate between key not there and key not deletable
+                        # TODO not able to seperate between key not there and key not deletable
                         action['cooked']['deleteSuccess'] = False
                 else:
                     success = deletekeys(key)
@@ -1203,6 +1233,10 @@ def cookrecipe(recipefile):
             if args_debug:
                 raise ex
             break
+        if args_interactive:
+            input('CONTINUE--> ')  
+        if args_verbosity > 0:
+            print("")
     with open(recipefile, "w") as file:
         recipe['preamble']['timestamp'] = tostrtime(now());
         hjson.dump(recipe, file)
@@ -1244,6 +1278,7 @@ def usage(message=None):
     print("               the configuration in the local directory is used", file=sys.stderr)
     print("    -d         operate in debug mode, not for use in production", file=sys.stderr)
     print("    -i         run in interactive mode", file=sys.stderr)
+    print("    -v         increase verbosity", file=sys.stderr)
     print("    -f recipe  alternate recipe file to produce or process, when not specified", file=sys.stderr)
     print("               recipe.json is used as filename", file=sys.stderr)
     print("", file=sys.stderr)
@@ -1276,7 +1311,7 @@ def main():
     TODO: better checking of the possible options
     '''
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "hdc:r:i:v", ["help","debug","config=","recipe=","interactive","verbose","verbosity=","now="])
+        opts, args = getopt.getopt(sys.argv[1:], "hdc:r:iv", ["help","debug","config=","recipe=","interactive","verbose","verbosity=","now="])
     except getopt.GetoptError as err:
         usage(str(err))
         return 1
