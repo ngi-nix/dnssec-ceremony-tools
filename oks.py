@@ -4,6 +4,7 @@ __author__ = "Berry van Halderen"
 __date__ = "$Nov 13, 2019 10:27:32 AM$"
 
 import os
+import subprocess
 import sys
 import getopt
 import hjson
@@ -15,6 +16,8 @@ import pkcs11
 import base64
 import binascii
 import random
+import xml.dom.minidom
+import traceback
 
 '''
 These parameters should come from a configuration file, the KASP configuration and command line arguments
@@ -39,7 +42,7 @@ args_verbosity=0
 Regular expressions used to match input
 '''
 duration_pattern=r'P((?P<years>\d+)Y)?((?P<months>\d+)M)?((?P<weeks>\d+)W)?((?P<days>\d+)D)?(T((?P<hours>\d+)H)?((?P<minuts>\d)+M)?((?P<seconds>\d+)S?)?)?'
-dnskey_pattern=r'(?P<zone>\S+)\s+(?P<ttl>\d+)\s+IN\s+DNSKEY\s+(?P<keyflags>\d+)\s+3\s+(?P<keyalgo>\d+)\s+(?P<keydata>\S+)\s*(;.*id\s*=\s*(?P<keytag>\d+).*)?$'
+dnskey_pattern=r'(?P<zone>\S+)\s+(?P<ttl>\d+)\s+IN\s+DNSKEY\s+(?P<keyrole>\d+)\s+3\s+(?P<keyalgo>\d+)\s+(?P<keydata>\S+)\s*(;.*id\s*=\s*(?P<keytag>\d+).*)?$'
 rrsig_pattern=r'(?P<zone>[^\s]+)\s+(?P<ttl>\d+)\s+IN\s+RRSIG\s+DNSKEY\s+(?P<sigalgo>\d+)\s+(?P<siglabels>\d+)\s+(?P<sigorigttl>\d+)\s+(?P<sigexpiration>\S+)\s+(?P<siginception>\S+)\s+(?P<keytag>\d+)\s+(?P<signame>\S+)\s+(?P<sigdata>\S+)$'
 datetime_pattern=r'(?P<year>\d\d\d\d)-?(?P<month>\d\d)-?(?P<day>\d\d) (?P<hour>\d\d):?(?P<minute>\d\d)[:.]?(?P<second>\d\d)'
 date_pattern=r'(?P<year>\d\d\d\d)-?(?P<month>\d\d)-?(?P<day>\d\d)'
@@ -94,6 +97,7 @@ class Record:
     keystore = None
     handles = { }
     rdata = None
+    signatures = [ ]
 
     def __init__(self, name):
         self.name = name
@@ -254,7 +258,7 @@ class Record:
                 if isinstance(rdata, str):
                     s += rdata
                 elif isinstance(rdata, datetime.date):
-                    s += rdata.strftime("%4Y%02d%02m%02H%02M")
+                    s += rdata.strftime("%4Y%02m%02d%02H%02M")
                 elif isinstance(rdata, (bytes,bytearray)):
                     s += base64.b64encode(rdata).decode()
                 else:
@@ -333,6 +337,8 @@ def tointtime(dt):
 def toduration(str):
     '''
     Convert string to duration pattern (a dict or int).
+    @param str: string containing a duration in RFCxxxx notation
+    @type str: C{String}
     '''
     duration = { }
     m = duration_pattern.match(str)
@@ -377,22 +383,23 @@ def duration_incr(dt, duration, add=True):
 
     delta['days'] += delta['weeks'] * 7
 
+    delta['years']   += int((dt.month-1  + delta['months']) / 12)
+    delta['months']   =     (dt.month-1  + delta['months']) % 12
     while True:
-        if(dt.day + delta['days'] > calendar.monthrange(dt.year, dt.month)[1]):
-            delta['days'] -= calendar.monthrange(dt.year, dt.month)[1]
+        delta['years']   += int((delta['months']) / 12)
+        delta['months']   =     (delta['months']) % 12
+        if delta['months'] < 0:
+            delta['months'] += 12
+            delta['years'] -= 1
+        if(dt.day + delta['days'] > calendar.monthrange(dt.year, delta['months']+1)[1]):
+            delta['days'] -= calendar.monthrange(dt.year, delta['months'])[1]
             delta['months'] += 1
         elif(dt.day + delta['days'] < 1):
-            delta['days'] += calendar.monthrange(dt.year, dt.month)[1]
+            delta['days'] += calendar.monthrange(dt.year, delta['months'])[1]
             delta['months'] -= 1
         else:
             break
     delta['days']    += dt.day
-
-    delta['years']   += int((dt.month-1  + delta['months']) / 12)
-    delta['months']   =     (dt.month-1  + delta['months']) % 12
-    if delta['months'] < 0:
-        delta['months'] += 12
-        delta['years'] -= 1
     delta['years']   += dt.year
     return datetime.datetime(delta['years'], delta['months'] + 1, delta['days'],
                              delta['hours'], delta['minutes'], delta['seconds'])
@@ -724,13 +731,11 @@ def unwraptemplate(key):
         template[pkcs11.constants.Attribute.LABEL] = label
     if id != None:
         template[pkcs11.constants.Attribute.ID] = id
-    template[pkcs11.constants.Attribute.CLASS]        = pkcs11.ObjectClass.PRIVATE_KEY
-    template[pkcs11.constants.Attribute.KEY_TYPE]     = pkcs11.KeyType.RSA
     template[pkcs11.constants.Attribute.PRIVATE]      = True
     template[pkcs11.constants.Attribute.DECRYPT]      = True
     template[pkcs11.constants.Attribute.SIGN]         = False
     template[pkcs11.constants.Attribute.UNWRAP]       = True
-    template[pkcs11.constants.Attribute.SENSITIVE]    = False
+    #template[pkcs11.constants.Attribute.SENSITIVE]    = False
     template[pkcs11.constants.Attribute.EXTRACTABLE]  = True
     template[pkcs11.constants.Attribute.ENCRYPT]      = pkcs11.DEFAULT
     template[pkcs11.constants.Attribute.WRAP]         = pkcs11.DEFAULT
@@ -744,20 +749,22 @@ def unwrapsymkey(key, wrappingkey, bytes):
     id    = key.getkeyckaid()
     label = key.keylabel
     template = unwraptemplate(key)
-    template[pkcs11.constants.Attribute.TOKEN] = False
+    template[pkcs11.constants.Attribute.TOKEN]    = False
+    template[pkcs11.constants.Attribute.CLASS]    = pkcs11.ObjectClass.SECRET_KEY
+    template[pkcs11.constants.Attribute.KEY_TYPE] = pkcs11.KeyType.AES
     wraphandle = wrappingkey.handles['private']
     mechanism = pkcs11.mechanisms.Mechanism.RSA_PKCS
     flags = pkcs11.constants.MechanismFlag.HW | pkcs11.constants.MechanismFlag.SIGN | pkcs11.constants.MechanismFlag.VERIFY
     flags |= pkcs11.constants.MechanismFlag.DECRYPT
     flags |= pkcs11.constants.MechanismFlag.UNWRAP | pkcs11.constants.MechanismFlag.DIGEST
-    keyhandle = wraphandle.unwrap_key(object_class=pkcs11.ObjectClass.PRIVATE_KEY,
+    keyhandle = wraphandle.unwrap_key(object_class=pkcs11.ObjectClass.SECRET_KEY,
                                       key_type=pkcs11.KeyType.AES,
                                       key_data=bytes,
                                       label=label,
                                       id=id,
-                                      template=privtemplate,
-                                      store=False,
-                                      capabilities=flags)
+                                      template=template,
+                                      store=True,
+                                      capabilities=flags, mechanism=mechanism)
     key.handles['secret']  = keyhandle
 
 
@@ -767,7 +774,10 @@ def unwrapasymkey(key, wrappingkey, bytes):
     id    = key.getkeyckaid()
     label = key.keylabel
     template = unwraptemplate(key)
-    template[pkcs11.constants.Attribute.TOKEN] = True
+    template[pkcs11.constants.Attribute.TOKEN]    = True
+    template[pkcs11.constants.Attribute.CLASS]    = pkcs11.ObjectClass.PRIVATE_KEY
+    template[pkcs11.constants.Attribute.KEY_TYPE] = pkcs11.KeyType.RSA
+
     wraphandle = wrappingkey.handles['secret']
     mechanism = pkcs11.mechanisms.Mechanism.AES_KEY_WRAP
     flags = pkcs11.constants.MechanismFlag.HW | pkcs11.constants.MechanismFlag.SIGN | pkcs11.constants.MechanismFlag.VERIFY
@@ -836,40 +846,147 @@ def parsekey(params):
     return key
 
 
-def readkeyset(filename):
+def readkeysetline(line, keys, sigs):
+    try:
+        m = dnskey_pattern.match(line)
+        if(m):
+            m = m.groupdict()
+            key = Record(m['zone'])
+            key.ttl = int(m['ttl'])
+            key.type = 'DNSKEY'
+            key.keyrole = m['keyrole']
+            key.keyalgo = m['keyalgo']
+            key.keydata = m['keydata']
+            if m.get('keytag') != None and m.get('keytag') != "":
+                key.keytag = int(m['keytag'])
+            else:
+                key.keyonhsm = False
+            keys[key.getkeytag()] = key
+        m = rrsig_pattern.match(line)
+        if(m):
+            m = m.groupdict()
+            keytag = m['keytag']
+            m['sigexpiration'] = todatetime(m['sigexpiration'])
+            m['siginception'] = todatetime(m['siginception'])
+            m['rr'] = line
+            sigs.append(m)
+    except KeyError as ex:
+        raise Burned("unable to parse keyset")
+
+
+def readkeysetlines(lines):
+    keys = { }
+    sigs = [ ]
+    for line in lines.splitlines(True):
+        readkeysetline(line, keys, sigs)
+    expiration = now()
+    for key in keys.values():
+        key.signatures = [ ]
+    for sig in sigs:
+        expiration = max(expiration, sig.get('sigexpiration', datetime.datetime.min))
+        keytag = int(sig['keytag'])
+        keys[keytag].signatures.append(sig)
+    return ( keys, expiration )
+
+
+def readkeysetfile(filename):
     keys = { }
     sigs = { }
-    origin = None
     with open(filename, "r") as file:
         line = file.readline()
         while line:
-            m = dnskey_pattern.match(line)
-            if(m):
-                m = m.groupdict()
-                key = Record(m['zone'])
-                key.ttl = int(m['ttl'])
-                key.type = 'DNSKEY'
-                key.keyrole = m['keyrole']
-                key.keyalgo = m['keyalgo']
-                key.keydata = m['keydata']
-                if m.get('keytag') != None and m.get('keytag') != "":
-                    key.keytag = int(m['keytag'])
-                else:
-                    key.keyonhsm = False
-                keys[key.getkeytag()] = key
-            m = rrsig_pattern.match(line)
-            if(m):
-                m = m.groupdict()
-                keytag = m['keytag']
-                m['sigexpiration'] = todatetime(m['sigexpiration'])
-                m['siginception'] = todatetime(m['siginception'])
-                sigs[keytag] = { **sigs.get(keytag, { }), **m }
+            readkeysetline(line, keys, sigs)
             line = file.readline()
         file.close()
     expiration = now()
-    for sig in sigs.values():
+    for sig in sigs:
         expiration = max(expiration, sig.get("sigexpiration", datetime.datetime.min))
-    return ( origin, keys, expiration )
+        keytag = int(sig['keytag'])
+        keys[keytag].signatures.append(sig)
+    return ( keys, expiration )
+
+
+def getxpath(node, path, value=None, defaultValue=None):
+    if value != None:
+        return value
+    for p in path:
+        next = None
+        for n in node.childNodes:
+            if n.localName == n:
+                next = n
+                break
+        if next == None:
+            return defaultValue
+        else:
+            node = next
+    return node
+
+
+def signconf(zone, newkeys=None):
+    global kasp_refresh
+    global kasp_validity
+    global kasp_inceptionoffset
+    global kasp_keyttl
+    policy   = subprocess.getoutput('ods-enforcer zone list | sed -e ' + "'" + 's/^' + zone + '\\s*\\(\\S*\\)\\s[^\\/]*\\(.*\\)/\\1/p' + "'" + ' -e d')
+    signconf = subprocess.getoutput('ods-enforcer zone list | sed -e ' + "'" + 's/^' + zone + '\\s*\\(\\S*\\)\\s[^\\/]*\\(.*\\)/\\2/p' + "'" + ' -e d')
+    policy = "pass"
+    signconf = "signconf.xml"
+    doc = xml.dom.minidom.parse(signconf)
+    if newkeys == None:
+        for xmlzone in doc.getElementsByTagName("Zone"):
+            kasp_refresh = getxpath(xmlzone, [ "Signatures", "Refresh" ], value=kasp_refresh)
+            kasp_validity = getxpath(xmlzone, [ "Signatures", "Validity", "Default" ], value=kasp_validity)
+            kasp_inceptionoffset = getxpath(xmlzone, [ "Signatures", "InceptionOffset" ], value=kasp_inceptionoffset)
+            kasp_keyttl = getxpath(xmlzone, [ "Keys", "TTL" ], value=kasp_keyttl)
+    else:
+        for keys in doc.getElementsByTagName('Keys'):
+            for key in keys.getElementsByTagName('Key'):
+                keys.removeChild(key)
+            keys.normalize()
+            if keys.lastChild.nodeType == xml.dom.Node.TEXT_NODE:
+                keys.removeChild(keys.lastChild)
+            for key in newkeys:
+                keynode = doc.createElement("Key")
+                node = doc.createElement("Flags")
+                text = doc.createTextNode(str(key.keyrolenum()))
+                node.appendChild(text)
+                keynode.appendChild(doc.createTextNode("\n        "))
+                keynode.appendChild(node)
+                node = doc.createElement("Algorithm")
+                text = doc.createTextNode(str(key.keyalgonum()))
+                node.appendChild(text)
+                keynode.appendChild(doc.createTextNode("\n        "))
+                keynode.appendChild(node)
+                node = doc.createElement("Locator")
+                text = doc.createTextNode(str(key.keyckaid))
+                node.appendChild(text)
+                keynode.appendChild(doc.createTextNode("\n        "))
+                keynode.appendChild(node)
+                if key.isksk():
+                    node = doc.createElement("KSK")
+                    keynode.appendChild(doc.createTextNode("\n        "))
+                    keynode.appendChild(node)
+                if key.iszsk():
+                    node = doc.createElement("ZSK")
+                    keynode.appendChild(doc.createTextNode("\n        "))
+                    keynode.appendChild(node)
+                keynode.appendChild(doc.createTextNode("\n        "))
+                node = doc.createElement("Publish")
+                keynode.appendChild(node)
+                if key.isksk():
+                    rrset = key.str() +"\n"
+                    for signature in key.signatures:
+                        rrset += signature['rr'].strip() + "\n"
+                    node = doc.createElement("ResourceRecord")
+                    text = doc.createTextNode(rrset)
+                    node.appendChild(text)
+                    keynode.appendChild(doc.createTextNode("\n        "))
+                    keynode.appendChild(node)
+                keys.appendChild(doc.createTextNode("\n      "))
+                keys.appendChild(keynode)
+            keys.appendChild(doc.createTextNode("\n    "))
+        with open(signconf, "w") as f:
+            print(doc.toprettyxml(newl="",indent=""), file=f)
 
 
 def producerecipe(zone, inputfile, outputfile):
@@ -887,6 +1004,7 @@ def producerecipe(zone, inputfile, outputfile):
     global args_until
     global now
 
+    signconf(zone)
     kasp_refresh = toduration(kasp_refresh)
     kasp_validity = toduration(kasp_validity)
     kasp_inceptionoffset = toduration(kasp_inceptionoffset)
@@ -894,7 +1012,7 @@ def producerecipe(zone, inputfile, outputfile):
     description = args_recipedescription
 
     if os.path.exists(inputfile):
-        ( origin, keys, expiration ) = readkeyset(inputfile)
+        ( keys, expiration ) = readkeysetfile(inputfile)
     else:
         origin = zone
         keys = { }
@@ -1011,13 +1129,14 @@ def consumerecipe(recipefile, publishtime=None):
     for action in recipe['actions']:
         try:
             if action['actionType'] == 'produceSignedKeyset':
-                pass
-                # find out the minimum inception time
+                ownername  = action['actionParams']['ownerName']
+                rrset      = action['cooked']['signedKeysetRRs']
+                ( keys, expiration ) = readkeysetlines(rrset)
+                signconf(ownername, keys.values())
             elif action['actionType'] in ('importPublicKey') and action['cooked'].get('importSuccess'):
                 if action['cooked'].get('keyBlob') != None:
                     key = wrappingkey = parsekey(action['actionParams']['key'])
                     bytes = action['cooked']['keyBlob']
-                    bytes = base64.decode(bytes)
                     unwrapsymkey(key, wrappingkey, bytes)
             elif action['actionType'] in ('exportKeypair', 'exportKey') and action['cooked'].get('exportSuccess'):
                 if action['actionParams']['key']['keyType'] != "byRef":
@@ -1039,16 +1158,22 @@ def consumerecipe(recipefile, publishtime=None):
             print("missing value for field "+ex.args[0]+" in recipe", file=sys.stderr)
             print("recipe step "+str(recipecounter)+" failed")
             recipecomplete = False
+            if args_debug:
+                print(traceback.format_exc())
             break
         except pkcs11.exceptions.GeneralError as ex:
-            print("PKCS11 error", file=sys.stderr)
+            print("PKCS#11 error", file=sys.stderr)
             print("recipe step "+str(recipecounter)+" failed")
             recipecomplete = False
+            if args_debug:
+                print(traceback.format_exc())
             break
         except Burned as ex:
             print(ex.message, file=sys.stderr)
             print("recipe step "+str(recipecounter)+" failed")
             recipecomplete = False
+            if args_debug:
+                print(traceback.format_exc())
             break
     if recipecomplete:
         print("Recipe completed.", file=sys.stderr)
@@ -1104,7 +1229,6 @@ def cookrecipe(recipefile):
                 key.keysize  = action['actionParams']['keySize']
                 success = newkey(key=key, exportable=exportable, ontoken=True)
                 action['cooked']['generateSuccess'] = success
-                action['cooked']['success'] = success
                 if args_debug:
                     action['cooked']['keyTag'] = key.getkeytag()
                     if key.keyckaid != None:
@@ -1155,7 +1279,6 @@ def cookrecipe(recipefile):
                 else:
                     success = deletekeys(key)
                     action['cooked']['deleteSuccess'] = success
-                action['cooked']['success'] = success
             elif action['actionType'] in ('importPublicKey', 'importKey', 'importKeypair'):
                 if action['actionParams']['key']['keyType'] != "direct":
                     raise Burned("imported key not by direct key reference")
@@ -1176,12 +1299,12 @@ def cookrecipe(recipefile):
                     symkey.keysize  = 1024
                     success = newkey(key=symkey, exportable=True, ontoken=False)
                     if success:
-                        action['cooked']['keyBlob'] = wrapkey(symkey, key, True)                
-                action['cooked']['success'] = success
+                        action['cooked']['keyBlob'] = wrapkey(symkey, key, True)
+                action['cooked']['importSuccess'] = success
                 if args_debug:
                     action['cooked']['keyData'] = key.keydata
                     if key.keysecretdata != None:
-                        action['cooked']['keySecretData'] = key.keysecretdata
+                        action['cooked']['keySecretData'] = symkey.keysecretdata
                     if key.keyckaid != None:
                         action['cooked']['keyID'] = key.keyckaid
                     if key.keylabel != None and key.keylabel != "":
