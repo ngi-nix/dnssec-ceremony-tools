@@ -879,14 +879,16 @@ def readkeysetlines(lines):
     sigs = [ ]
     for line in lines.splitlines(True):
         readkeysetline(line, keys, sigs)
-    expiration = now()
+    expiration = datetime.datetime.min
+    inception  = datetime.datetime.min
     for key in keys.values():
         key.signatures = [ ]
     for sig in sigs:
+        inception  = max(inception,  sig.get('siginception',  datetime.datetime.min))
         expiration = max(expiration, sig.get('sigexpiration', datetime.datetime.min))
         keytag = int(sig['keytag'])
         keys[keytag].signatures.append(sig)
-    return ( keys, expiration )
+    return ( keys, inception, expiration )
 
 
 def readkeysetfile(filename):
@@ -1129,28 +1131,32 @@ def consumerecipe(recipefile, publishtime=None):
     for action in recipe['actions']:
         try:
             if action['actionType'] == 'produceSignedKeyset':
-                ownername  = action['actionParams']['ownerName']
-                rrset      = action['cooked']['signedKeysetRRs']
-                ( keys, expiration ) = readkeysetlines(rrset)
-                signconf(ownername, keys.values())
-            elif action['actionType'] in ('importPublicKey') and action['cooked'].get('importSuccess'):
-                if action['cooked'].get('keyBlob') != None:
-                    key = wrappingkey = parsekey(action['actionParams']['key'])
-                    bytes = action['cooked']['keyBlob']
-                    unwrapsymkey(key, wrappingkey, bytes)
-            elif action['actionType'] in ('exportKeypair', 'exportKey') and action['cooked'].get('exportSuccess'):
-                if action['actionParams']['key']['keyType'] != "byRef":
-                    raise Burned("exported key not by key reference")
-                key = parsekey(action['actionParams']['key'])
-                wrappingkey = action['actionParams'].get('wrappingKey')
-                if wrappingkey == None:
-                    key.keysecretdata = action['cooked']['keyBlob']
-                    key.keydata = action['cooked']['keyData']
-                    newkey(key, False, True)
-                else:
-                    wrappingkey = parsekey(wrappingkey)
-                    bytes = action['cooked']['keyBlob']
-                    unwrapasymkey(key, wrappingkey, bytes)
+                if publishtime != None:
+                    ownername  = action['actionParams']['ownerName']
+                    rrset      = action['cooked']['signedKeysetRRs']
+                    ( keys, inception, expiration ) = readkeysetlines(rrset)
+                    if inception < publishtime and publishtime < expiration:
+                        signconf(ownername, keys.values())
+            elif action['actionType'] in ('importPublicKey'):
+                if publishtime == None and action['cooked'].get('importSuccess'):
+                    if action['cooked'].get('keyBlob') != None:
+                        key = wrappingkey = parsekey(action['actionParams']['key'])
+                        bytes = action['cooked']['keyBlob']
+                        unwrapsymkey(key, wrappingkey, bytes)
+            elif action['actionType'] in ('exportKeypair', 'exportKey'):
+                if publishtime == None and action['cooked'].get('exportSuccess'):
+                    if action['actionParams']['key']['keyType'] != "byRef":
+                        raise Burned("exported key not by key reference")
+                    key = parsekey(action['actionParams']['key'])
+                    wrappingkey = action['actionParams'].get('wrappingKey')
+                    if wrappingkey == None:
+                        key.keysecretdata = action['cooked']['keyBlob']
+                        key.keydata = action['cooked']['keyData']
+                        newkey(key, False, True)
+                    else:
+                        wrappingkey = parsekey(wrappingkey)
+                        bytes = action['cooked']['keyBlob']
+                        unwrapasymkey(key, wrappingkey, bytes)
             else:
                 pass
             recipecounter += 1
@@ -1585,7 +1591,13 @@ def main():
     elif args[0] == "cook":
         return cookrecipe(recipe)
     elif args[0] == "consume":
-        return consumerecipe(recipe)
+        publishtime = None
+        if len(args) == 2:
+            publishtime = todatetime(args[1])
+        if publishtime == None:
+            return consumerecipe(recipe)
+        else:
+            return consumerecipe(recipe, publishtime)
     else:
         usage("unrecognized argument " + args[0])
         return 1
