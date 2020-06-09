@@ -41,7 +41,7 @@ args_verbosity=0
 '''
 Regular expressions used to match input
 '''
-duration_pattern=r'P((?P<years>\d+)Y)?((?P<months>\d+)M)?((?P<weeks>\d+)W)?((?P<days>\d+)D)?(T((?P<hours>\d+)H)?((?P<minuts>\d)+M)?((?P<seconds>\d+)S?)?)?'
+duration_pattern=r'P((?P<years>\d+)Y)?((?P<months>\d+)M)?((?P<weeks>\d+)W)?((?P<days>\d+)D)?(T((?P<hours>\d+)H)?((?P<minutes>\d)+M)?((?P<seconds>\d+)S?)?)?'
 dnskey_pattern=r'(?P<zone>\S+)\s+(?P<ttl>\d+)\s+IN\s+DNSKEY\s+(?P<keyrole>\d+)\s+3\s+(?P<keyalgo>\d+)\s+(?P<keydata>\S+)\s*(;.*id\s*=\s*(?P<keytag>\d+).*)?$'
 rrsig_pattern=r'(?P<zone>[^\s]+)\s+(?P<ttl>\d+)\s+IN\s+RRSIG\s+DNSKEY\s+(?P<sigalgo>\d+)\s+(?P<siglabels>\d+)\s+(?P<sigorigttl>\d+)\s+(?P<sigexpiration>\S+)\s+(?P<siginception>\S+)\s+(?P<keytag>\d+)\s+(?P<signame>\S+)\s+(?P<sigdata>\S+)$'
 datetime_pattern=r'(?P<year>\d\d\d\d)-?(?P<month>\d\d)-?(?P<day>\d\d) (?P<hour>\d\d):?(?P<minute>\d\d)[:.]?(?P<second>\d\d)'
@@ -229,7 +229,7 @@ class Record:
 
     def str(self):
         s  = self.name
-        if not self.name.endswith("."):
+        if not s.endswith("."):
             s += "."
         s += "\t"
         s += str(self.ttl)
