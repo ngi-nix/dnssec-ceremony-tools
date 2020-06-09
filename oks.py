@@ -407,7 +407,7 @@ def duration_incr(dt, duration, add=True):
 
 def duration_decr(dt, duration):
     '''
-    Decrament a datetime with a duration, returning the resulting datetime object.
+    Decrement a datetime with a duration, returning the resulting datetime object.
     '''
     return duration_incr(dt, duration, False)
 
@@ -1470,12 +1470,12 @@ def main():
             usage("unhhandled option "+o)
             return 1
     '''
-    Parse the configuration file.  There is no default location is used for
+    Parse the configuration file.  There is no default location for
     the configuration file, but the current working directory is used, or
     an explicit location in case of a command line option (-c or --config).
     This is by design, this program isn't expected to be installed but
-    directly used from whichever location is it put in.
-    TODO: some paramters are required but no check is made whether it is
+    directly used from whichever location it is put in.
+    TODO: some parameters are required but no check is made whether it is
           present, leading to an exception rather then a message.  Also the
           type of any parameter isn't checked properly.
     '''
@@ -1540,18 +1540,18 @@ def main():
                     conf_exchkeysize = int(conf_exchkeysize)
     '''
     Initialize the sessions to the HSM, going over all the specified tokens in
-    the confiuration file and opening a read-write session to all of them.
+    the configuration file and opening a read-write session to all of them.
     Note that you cannot open a session to the same token twice, and that
     initializing the library of the pkcs11 interface twice might lead to
     problems as well.  Hence we need to first order the configured tokens per
-    library and token label as well such that we do not perform a open session
+    library and token label as well such that we do not perform an open session
     twice, especially not for the default token).  Make sure there is a default
     token as well if there is only one token specified.
     TODO: It could be that some sessions aren't needed for the action
           requested, or that only a read only session would suffice.  This
           would only be known after processing the recipe with the specified
-          action though and as such is it preferred at the moment that the
-          users specifies the correct sessions in the configuration file.
+          action though and as such it is preferred at the moment that the
+          users specify the correct sessions in the configuration file.
     '''
     sessions = { }
     for module in repos.keys():
