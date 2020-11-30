@@ -1,0 +1,10 @@
+.dirstamp
+**/*~
+/build/
+/test-driver
+/nbproject/private/
+
+/attic
+/run.sh
+/softhsm-**
+/ROOT
