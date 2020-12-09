@@ -1,0 +1,22 @@
+{
+  recipeSpecVersion: v1.0
+  preamble:
+  {
+    timestamp: 2019-19-12 14:39:09
+    description: "Initialize the Operational environment with an encryption key"
+  }
+  actions:
+  [
+    {
+      actionType: importKey
+      actionParams:
+      {
+        keyAlgo: RSA
+        keyLabel: recipekey
+        keySize: "2048"
+        keySecretData: AAEArLfLVmf+WkZhVktdcYjMktgSbw2fZrFNQJ35RhpuWETTALMV8V3Cs9C8jbyIrQEkLu7a138+S5GqG4iqUObe7zmZCRxEQCdDFOXxSFMHCRXVAHmMafs3Fublb36ltw9SwyPlg1CuqegMGaHJ+c6evMoV3avyP4i0PRFVTkV9LiCNr+2NIZLsv2eeSXTaQmT6hk2t9cMCZx7JtH5R8/nKxZ0KsMa4S4J7efGGUA4If9vTTjUBOytK77pxII972hjLaxVKanVheW1lgr3Gke0/oewHiGRg0kB1rbx0BWfRlgknS7vb37l0l7A2v4Mt065rmrPbjE75fSvyqr3qUHUAAdCReNJa90GIIVfCDiyOyJVOEAiaolwnfYS7cWCyXFCLEnDvM34hdAHnK+rV13DztCa7N0Z2cUIwQNElKOAUwQKH41ViLR18/xODptwYhnjkEQLJHg3sO0FZV1nUoNtrhJ2KdLaYYv5LufheDgRXqbbVhZ8aVti7HLTbQaiUR8ppVT/YCy4tdDoEcX5ue+VdkOesvfT6BcmpAuar/gJMvH1wMV/DPwTdPAo1sK0QOToy/6NCCS/oLgr3j38IrjxDOOngGwyXtfdssPN5d0cBkKXFIxfWbf8aalAfpTVrrX6/KFXKWNG6wMZkJkJlaywtTN4uUgfkXqFzcJp8Gw5Ie3k=
+        keyData: AwEAAdCReNJa90GIIVfCDiyOyJVOEAiaolwnfYS7cWCyXFCLEnDvM34hdAHnK+rV13DztCa7N0Z2cUIwQNElKOAUwQKH41ViLR18/xODptwYhnjkEQLJHg3sO0FZV1nUoNtrhJ2KdLaYYv5LufheDgRXqbbVhZ8aVti7HLTbQaiUR8ppVT/YCy4tdDoEcX5ue+VdkOesvfT6BcmpAuar/gJMvH1wMV/DPwTdPAo1sK0QOToy/6NCCS/oLgr3j38IrjxDOOngGwyXtfdssPN5d0cBkKXFIxfWbf8aalAfpTVrrX6/KFXKWNG6wMZkJkJlaywtTN4uUgfkXqFzcJp8Gw5Ie3k=
+      }
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<KASP>
+	<Policy name="example">
+		<Description>Example policy</Description>
+		<Signatures>
+			<Resign>PT1H</Resign>
+			<Refresh>PT2H</Refresh>
+			<Validity>
+				<Default>P14D</Default>
+				<Denial>PT4H</Denial>
+			</Validity>
+			<Jitter>PT1H</Jitter>
+			<InceptionOffset>PT3600S</InceptionOffset>
+			<MaxZoneTTL>PT3600S</MaxZoneTTL>
+		</Signatures>
+		<Denial>
+			<NSEC/>
+		</Denial>
+		<Keys>
+			<TTL>PT300S</TTL>
+			<RetireSafety>PT360S</RetireSafety>
+			<PublishSafety>PT360S</PublishSafety>
+			<KSK>
+				<Algorithm length="2048">8</Algorithm>
+				<Lifetime>P400D</Lifetime>
+				<Repository>Bunker</Repository>
+			</KSK>
+			<ZSK>
+				<Algorithm length="1024">8</Algorithm>
+				<Lifetime>P1M</Lifetime>
+				<Repository>Bunker</Repository>
+			</ZSK>
+		</Keys>
+		<Zone>
+			<PropagationDelay>PT300S</PropagationDelay>
+			<SOA>
+				<TTL>PT300S</TTL>
+				<Minimum>PT300S</Minimum>
+				<Serial>unixtime</Serial>
+			</SOA>
+		</Zone>
+		<Parent>
+			<PropagationDelay>PT9999S</PropagationDelay>
+			<DS>
+				<TTL>PT3600S</TTL>
+			</DS>
+			<SOA>
+				<TTL>PT172800S</TTL>
+				<Minimum>PT10800S</Minimum>
+			</SOA>
+		</Parent>
+	</Policy>
+</KASP>
