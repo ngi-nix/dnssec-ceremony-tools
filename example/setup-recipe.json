@@ -1,0 +1,46 @@
+{
+  recipeSpecVersion: v1.0
+  preamble:
+  {
+    timestamp: 2019-19-12 14:39:09
+    description: Hello
+  }
+  actions:
+  [
+    {
+      actionType: generateKey
+      actionParams:
+      {
+        keyAlgo: RSA
+        keyLabel: recipekey
+        keySize: "2048"
+        exportable: true
+      }
+      cooked:
+      {
+        generateSuccess: true
+        success: true
+        keyLabel: recipekey
+        keyData: AwEAAaaP3rS0nX+Nu3onvfgzJRlUKI+G214MWTWwS0ljhWFlNGtVf56d3TTRxRs6RWSMqdqme7tWswv6xiQVF5/chdAiW168+nwsW6apTFrVQz5mictXqZ+IlA86dkrnm2WIJCtIswMcxOwjxOie8R/awQtHpWgSTsIONvE/kTXbjgmsGyds8b7BZEG0i7xBz6BVnxpbZKC/q6huH8MArwUWP+6keP4lHCjN6RUOYNj0yGXOsTaMdEn1j3kkXgGZfODRurengLt4dYCm/zyC+rgN0YVVVCM2/V5EKQ+gGX0yzWHs/5HKxXkBW0Tpoy7Rwd//SQD07/Po10VmcdDZEqaPenU=
+      }
+    }
+    {
+      actionType: exportKey
+      actionParams:
+      {
+        key:
+        {
+          keyType: byRef
+          keyLabel: recipekey
+        }
+      }
+      cooked:
+      {
+        keySecretData: AAEArLfLVmf+WkZhVktdcYjMktgSbw2fZrFNQJ35RhpuWETTALMV8V3Cs9C8jbyIrQEkLu7a138+S5GqG4iqUObe7zmZCRxEQCdDFOXxSFMHCRXVAHmMafs3Fublb36ltw9SwyPlg1CuqegMGaHJ+c6evMoV3avyP4i0PRFVTkV9LiCNr+2NIZLsv2eeSXTaQmT6hk2t9cMCZx7JtH5R8/nKxZ0KsMa4S4J7efGGUA4If9vTTjUBOytK77pxII972hjLaxVKanVheW1lgr3Gke0/oewHiGRg0kB1rbx0BWfRlgknS7vb37l0l7A2v4Mt065rmrPbjE75fSvyqr3qUHUAAdCReNJa90GIIVfCDiyOyJVOEAiaolwnfYS7cWCyXFCLEnDvM34hdAHnK+rV13DztCa7N0Z2cUIwQNElKOAUwQKH41ViLR18/xODptwYhnjkEQLJHg3sO0FZV1nUoNtrhJ2KdLaYYv5LufheDgRXqbbVhZ8aVti7HLTbQaiUR8ppVT/YCy4tdDoEcX5ue+VdkOesvfT6BcmpAuar/gJMvH1wMV/DPwTdPAo1sK0QOToy/6NCCS/oLgr3j38IrjxDOOngGwyXtfdssPN5d0cBkKXFIxfWbf8aalAfpTVrrX6/KFXKWNG6wMZkJkJlaywtTN4uUgfkXqFzcJp8Gw5Ie3k=
+        keyData: AwEAAdCReNJa90GIIVfCDiyOyJVOEAiaolwnfYS7cWCyXFCLEnDvM34hdAHnK+rV13DztCa7N0Z2cUIwQNElKOAUwQKH41ViLR18/xODptwYhnjkEQLJHg3sO0FZV1nUoNtrhJ2KdLaYYv5LufheDgRXqbbVhZ8aVti7HLTbQaiUR8ppVT/YCy4tdDoEcX5ue+VdkOesvfT6BcmpAuar/gJMvH1wMV/DPwTdPAo1sK0QOToy/6NCCS/oLgr3j38IrjxDOOngGwyXtfdssPN5d0cBkKXFIxfWbf8aalAfpTVrrX6/KFXKWNG6wMZkJkJlaywtTN4uUgfkXqFzcJp8Gw5Ie3k=
+        keyBlob: AAEArLfLVmf+WkZhVktdcYjMktgSbw2fZrFNQJ35RhpuWETTALMV8V3Cs9C8jbyIrQEkLu7a138+S5GqG4iqUObe7zmZCRxEQCdDFOXxSFMHCRXVAHmMafs3Fublb36ltw9SwyPlg1CuqegMGaHJ+c6evMoV3avyP4i0PRFVTkV9LiCNr+2NIZLsv2eeSXTaQmT6hk2t9cMCZx7JtH5R8/nKxZ0KsMa4S4J7efGGUA4If9vTTjUBOytK77pxII972hjLaxVKanVheW1lgr3Gke0/oewHiGRg0kB1rbx0BWfRlgknS7vb37l0l7A2v4Mt065rmrPbjE75fSvyqr3qUHUAAdCReNJa90GIIVfCDiyOyJVOEAiaolwnfYS7cWCyXFCLEnDvM34hdAHnK+rV13DztCa7N0Z2cUIwQNElKOAUwQKH41ViLR18/xODptwYhnjkEQLJHg3sO0FZV1nUoNtrhJ2KdLaYYv5LufheDgRXqbbVhZ8aVti7HLTbQaiUR8ppVT/YCy4tdDoEcX5ue+VdkOesvfT6BcmpAuar/gJMvH1wMV/DPwTdPAo1sK0QOToy/6NCCS/oLgr3j38IrjxDOOngGwyXtfdssPN5d0cBkKXFIxfWbf8aalAfpTVrrX6/KFXKWNG6wMZkJkJlaywtTN4uUgfkXqFzcJp8Gw5Ie3k=
+        exportSuccess: true
+      }
+    }
+  ]
+}

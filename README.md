@@ -170,3 +170,8 @@ times.  You instruct the tool to use this input file using:
 
 The rolling mechanism is however limited and partially controlled from the
 key-and-signing-policy parameters in the configuration file.
+
+### Example run with OpenDNSSEC
+
+For a fully working example run with sample configuration and input files
+including a OpenDNSSEC and SoftHSM setup see the example directory.

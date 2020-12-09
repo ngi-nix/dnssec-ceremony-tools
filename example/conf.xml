@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration>
+	<RepositoryList>
+		<Repository name="Bunker">
+			<Module>.../ROOT/lib/softhsm/libsofthsm2.so</Module>
+			<TokenLabel>Bunker</TokenLabel>
+			<PIN>1234</PIN>
+			<!-- DO NOT USE SkipPublicKey -->
+		</Repository>
+	</RepositoryList>
+	<Common>
+		<Logging>
+			<Verbosity>3</Verbosity>
+			<Syslog><Facility>local0</Facility></Syslog>
+		</Logging>
+		<PolicyFile>.../ROOT/etc/opendnssec/kasp.xml</PolicyFile>
+		<ZoneListFile>.../ROOT/etc/opendnssec/zonelist.xml</ZoneListFile>
+	</Common>
+	<Enforcer>
+		<WorkerThreads>1</WorkerThreads>
+		<Datastore>
+		  <SQLite>/home/berry/workspace/OpenDNSSEC-2.1/ROOT/var/opendnssec/kasp.db</SQLite>
+		</Datastore>
+		<AutomaticKeyGenerationPeriod>P1M</AutomaticKeyGenerationPeriod>
+		<WorkingDirectory>.../ROOT/var/opendnssec/enforcer</WorkingDirectory>
+	</Enforcer>
+
+	<Signer>
+		<WorkingDirectory>.../ROOT/var/opendnssec/signer</WorkingDirectory>
+		<WorkerThreads>1</WorkerThreads>
+		<SignerThreads>1</SignerThreads>
+	</Signer>
+</Configuration>
