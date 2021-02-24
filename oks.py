@@ -51,7 +51,7 @@ args_verbosity=0
 '''
 Regular expressions used to match input
 '''
-duration_pattern=r'P((?P<years>\d+)Y)?((?P<months>\d+)M)?((?P<weeks>\d+)W)?((?P<days>\d+)D)?(T((?P<hours>\d+)H)?((?P<minuts>\d)+M)?((?P<seconds>\d+)S?)?)?'
+duration_pattern=r'P((?P<years>\d+)Y)?((?P<months>\d+)M)?((?P<weeks>\d+)W)?((?P<days>\d+)D)?(T((?P<hours>\d+)H)?((?P<minutes>\d)+M)?((?P<seconds>\d+)S?)?)?'
 dnskey_pattern=r'(?P<zone>\S+)\s+(?P<ttl>\d+)\s+IN\s+DNSKEY\s+(?P<keyrole>\d+)\s+3\s+(?P<keyalgo>\d+)\s+(?P<keydata>\S+)\s*(;.*id\s*=\s*(?P<keytag>\d+).*)?$'
 keymeta_pattern=r';;Key:\s+locator\s+(?P<locator>\S+)\s+algorithm\s+(?P<algorithm>\d+)\s+flags\s+(?P<flags>\d+)\s+publish\s+(?P<publish>\d)\s+ksk\s+(?P<ksk>\d)\s+zsk\s+(?P<zsk>\d)\s+keytag\s+(?P<keytag>\d+)'
 r'(?P<zone>\S+)\s+(?P<ttl>\d+)\s+IN\s+DNSKEY\s+(?P<keyrole>\d+)\s+3\s+(?P<keyalgo>\d+)\s+(?P<keydata>\S+)\s*(;.*id\s*=\s*(?P<keytag>\d+).*)?$'
@@ -248,7 +248,7 @@ class Record:
 
     def str(self):
         s  = self.name
-        if not self.name.endswith("."):
+        if not s.endswith("."):
             s += "."
         s += "\t"
         s += str(self.ttl)
@@ -433,7 +433,7 @@ def duration_incr(dt, duration, add=True):
 
 def duration_decr(dt, duration):
     '''
-    Decrament a datetime with a duration, returning the resulting datetime object.
+    Decrement a datetime with a duration, returning the resulting datetime object.
     '''
     return duration_incr(dt, duration, False)
 
@@ -1511,10 +1511,10 @@ def usage(message=None):
         print(sys.argv[0] + ": " + message, file=sys.stderr)
         print("", file=sys.stderr)
     print("usage:  oks [ -h -d -c config -f recipe.json -i -v ] <command>", file=sys.stderr)
-    print("                          produce <zone> <until> <description> [ <input> ]")
-    print("                          cook")
-    print("                          consume [ import | <time> | now]")
-    print("                          consume [ import | <time> | now]")
+    print("                          produce <zone> <until> <description> [ <input> ]", file=sys.stderr)
+    print("                          cook", file=sys.stderr)
+    print("                          consume [ import | <time> | now]", file=sys.stderr)
+    print("                          consume [ import | <time> | now]", file=sys.stderr)
     print("", file=sys.stderr)
     print("    the command is one of the produce, cook or consume variants which:", file=sys.stderr)
     print("    produce    produce a recipe for the specified zone with the optional", file=sys.stderr)
@@ -1596,12 +1596,12 @@ def main():
             usage("unhhandled option "+o)
             return 1
     '''
-    Parse the configuration file.  There is no default location is used for
+    Parse the configuration file.  There is no default location for
     the configuration file, but the current working directory is used, or
     an explicit location in case of a command line option (-c or --config).
     This is by design, this program isn't expected to be installed but
-    directly used from whichever location is it put in.
-    TODO: some paramters are required but no check is made whether it is
+    directly used from whichever location it is put in.
+    TODO: some parameters are required but no check is made whether it is
           present, leading to an exception rather then a message.  Also the
           type of any parameter isn't checked properly.
     '''
@@ -1668,18 +1668,18 @@ def main():
                     conf_exchkeysize = int(conf_exchkeysize)
     '''
     Initialize the sessions to the HSM, going over all the specified tokens in
-    the confiuration file and opening a read-write session to all of them.
+    the configuration file and opening a read-write session to all of them.
     Note that you cannot open a session to the same token twice, and that
     initializing the library of the pkcs11 interface twice might lead to
     problems as well.  Hence we need to first order the configured tokens per
-    library and token label as well such that we do not perform a open session
+    library and token label as well such that we do not perform an open session
     twice, especially not for the default token).  Make sure there is a default
     token as well if there is only one token specified.
     TODO: It could be that some sessions aren't needed for the action
           requested, or that only a read only session would suffice.  This
           would only be known after processing the recipe with the specified
-          action though and as such is it preferred at the moment that the
-          users specifies the correct sessions in the configuration file.
+          action though and as such it is preferred at the moment that the
+          users specify the correct sessions in the configuration file.
     '''
     sessions = { }
     for module in repos.keys():
