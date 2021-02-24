@@ -1,5 +1,9 @@
 #! /usr/bin/env python3
 
+# SPDX-FileCopyrightText: 2019 NLnet Labs <https://nlnetlabs.nl/>
+# 
+# SPDX-License-Identifier: BSD-2-Clause
+
 __author__ = "Berry van Halderen"
 __date__ = "$Nov 13, 2019 10:27:32 AM$"
 __version__ = "1.0"
