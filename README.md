@@ -32,19 +32,19 @@ only.  This environment is further on called the bunker.  In this bunker
 the data needed in the operational environment is signed.  Enough signed
 material should be produced such that the operational environment can continue
 for some time.  For DNSSEC this involves creating multiple signed key set,
-accomodating for key rolls, generating and disposing keys and either importing
+accommodating for key rolls, generating and disposing keys and either importing
 or exporting key material.
 
 In the bunker all steps should be transparent, simple, without failure or
-exceptions.  No choices in the signing process should be needed and every
-things should be as simple as possible.
+exceptions.  No choices in the signing process should be needed and everything
+should be as simple as possible.
 
 All complications should be done beforehand and only a fixed 'recipe' should
 be executed with simple steps of which the automation is clear and transparent.
 A small clean set of software dependencies should be used because system
 upgrades will be difficult.
 
-The off-line key signing application execution is therefor three process
+The off-line key signing application execution is therefore three process
 steps:
 
 - The generation of a recipe, based on the current known state and used keys
@@ -57,7 +57,7 @@ steps:
   beforehand and even tested in a separate environment if wanted.
 - The cooking of the recipe in the bunker.  This reads and interprets the
   recipe steps one by one, performs the action and fills in the result in
-  the recipe.  Apart from the sequence, steps are independent from eachother
+  the recipe.  Apart from the sequence, steps are independent from each other
   and thus the flow and state can be kept simple.
 - The augmented recipe with the results can then be carried from the bunker
   into the operational environment where its result can be used for the
@@ -88,7 +88,7 @@ The following software requirements are needed on your system:
 
 Completion of the minimal viable product will still include:
 
-- Further explain/document configuration file'
+- Further explain/document configuration file
 - Further explain default generated recipe file in depth, including
   symmetric key mechanism to exchange files between bunker and operational
   environment;
@@ -98,7 +98,7 @@ Completion of the minimal viable product will still include:
 - further completion of the produce and consumation of the recipes, including
   multiple ZSK rolls.
 
-### Forseen limitations
+### Foreseen limitations
 
 - DNSSEC Algorithm support will remain at RSASHA based, not including MD5,
   nor eliptic curve (though these will not be difficult to add).
