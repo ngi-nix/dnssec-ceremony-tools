@@ -25,6 +25,27 @@ import random
 import xml.dom.minidom
 import traceback
 
+def toduration(str):
+    '''
+    Convert string to duration pattern (a dict or int).
+    @param str: string containing a duration in RFCxxxx notation
+    @type str: C{String}
+    '''
+    duration = { }
+    if type(str) == int:
+        duration['seconds'] = str
+        return duration
+    m = duration_pattern.match(str)
+    if(m):
+        dict = m.groupdict()
+        for key, val in dict.items():
+            if(not val == None):
+                duration[key] = int(val)
+        return duration
+    else:
+        return int(str)
+
+
 '''
 These parameters should come from a configuration file, the KASP configuration and command line arguments
 '''
@@ -359,27 +380,6 @@ def tostrtime(dt):
 
 def tointtime(dt):
     return int(dt.timestamp())
-
-
-def toduration(str):
-    '''
-    Convert string to duration pattern (a dict or int).
-    @param str: string containing a duration in RFCxxxx notation
-    @type str: C{String}
-    '''
-    duration = { }
-    if type(str) == int:
-        duration['seconds'] = str
-        return duration
-    m = duration_pattern.match(str)
-    if(m):
-        dict = m.groupdict()
-        for key, val in dict.items():
-            if(not val == None):
-                duration[key] = int(val)
-        return duration
-    else:
-        return int(str)
 
 
 def duration_incr(dt, duration, add=True):
