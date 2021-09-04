@@ -17,38 +17,39 @@
         });
     in
     {
-      overlay = final: prev: with prev; let
-        py = python3.withPackages (p: with p; [
-          hjson
-          pyyaml
-          python-pkcs11
-        ]);
-      in
-      {
+      overlay = final: prev: with prev; {
         dnssec-ceremony-tools = stdenv.mkDerivation rec {
-          pname = "dnssec-ceremony-tools";
-          version = "unstable-2021-02-25";
+            pname = "dnssec-ceremony-tools";
+            version = "unstable-2021-02-25";
 
-          src = ./.;
+            src = ./.;
 
-          dontConfigure = true;
-          dontBuild = true;
+            dontConfigure = true;
+            dontBuild = true;
 
-          installPhase = ''
-            substituteInPlace oks.py \
-              --replace '/usr/bin/env python3' '${py}/bin/python3'
-            substituteInPlace oks.conf \
-              --replace '/home/berry/nlnetlabs/dnssec-ceremony-tools/ROOT' '${softhsm}'
-            mkdir -p $out/bin $out/share
-            cp oks.py $out/bin
-            cp oks.conf $out/share
-          '';
-        };
+            propagatedBuildInputs = [
+              python3Packages.hjson
+              python3Packages.pyyaml
+              python3Packages.python-pkcs11
+            ];
+
+            installPhase = ''
+              substituteInPlace oks.py \
+                --replace '/usr/bin/env python3' '${python3}/bin/python3'
+              substituteInPlace oks.conf \
+                --replace '/home/berry/nlnetlabs/dnssec-ceremony-tools/ROOT' '${softhsm}'
+              mkdir -p $out/bin $out/share
+              cp oks.py $out/bin
+              cp oks.conf $out/share
+            '';
+          };
       };
 
       packages = forAllSystems (system: {
         inherit (nixpkgsFor.${system}) dnssec-ceremony-tools;
       });
+
+      devShell = self.defaultPackage;
 
       defaultPackage = forAllSystems (system:
         self.packages.${system}.dnssec-ceremony-tools);
