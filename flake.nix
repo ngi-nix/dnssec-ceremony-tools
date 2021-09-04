@@ -37,8 +37,11 @@
           installPhase = ''
             substituteInPlace oks.py \
               --replace '/usr/bin/env python3' '${py}/bin/python3'
-            mkdir -p $out/bin
+            substituteInPlace oks.conf \
+              --replace '/home/berry/nlnetlabs/dnssec-ceremony-tools/ROOT' '${softhsm}'
+            mkdir -p $out/bin $out/share
             cp oks.py $out/bin
+            cp oks.conf $out/share
           '';
         };
       };
