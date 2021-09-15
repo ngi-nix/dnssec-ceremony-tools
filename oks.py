@@ -1574,8 +1574,7 @@ def main():
     except getopt.GetoptError as err:
         usage(str(err))
         return 1
-    dirname = os.path.dirname(__file__)
-    configfile = os.path.join(dirname, "../share/oks.conf")
+    configfile = "oks.conf"
     recipe = "recipe.json"
     inputfile = None
     inputzone = None

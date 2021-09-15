@@ -18,7 +18,15 @@
     in
     {
       overlay = final: prev: with prev; {
-        dnssec-ceremony-tools = stdenv.mkDerivation rec {
+        dnssec-ceremony-tools =
+          let
+            py = python3.withPackages (p: with p; [
+              hjson
+              pyyaml
+              python-pkcs11
+            ]);
+          in
+          stdenv.mkDerivation rec {
             pname = "dnssec-ceremony-tools";
             version = "unstable-2021-02-25";
 
@@ -35,9 +43,14 @@
 
             installPhase = ''
               substituteInPlace oks.py \
-                --replace '/usr/bin/env python3' '${python3}/bin/python3'
+                --replace '/usr/bin/env python3' '${py}/bin/python3' \
+                --replace 'configfile = "oks.conf"' '
+                  dirname = os.path.dirname(__file__)
+                  configfile = os.path.join(dirname, "../share/oks.conf")
+                '
               substituteInPlace oks.conf \
                 --replace '/home/berry/nlnetlabs/dnssec-ceremony-tools/ROOT' '${softhsm}'
+
               mkdir -p $out/bin $out/share
               cp oks.py $out/bin
               cp oks.conf $out/share
